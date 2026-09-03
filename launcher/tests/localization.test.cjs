@@ -14,7 +14,6 @@ const electronMain = read("launcher", "electron", "main.cjs");
 const stateSource = read("launcher", "electron", "state.cjs");
 const englishReadme = read("README.md");
 const chineseReadme = read("README.zh-CN.md");
-const japaneseReadme = read("README.ja.md");
 
 function commandFences(source) {
   return [...source.matchAll(/```(bash|powershell)\n([\s\S]*?)```/g)]
@@ -59,11 +58,11 @@ test("catalog refresh guidance distinguishes a full Codex restart from account l
   assert.match(i18nSource, /サインアウト後の再ログインやウィンドウを閉じるだけでは再起動になりません/);
 });
 
-test("localized READMEs preserve every command block and link target from English", () => {
-  for (const source of [chineseReadme, japaneseReadme]) {
-    assert.deepEqual(commandFences(source), commandFences(englishReadme));
-    assert.deepEqual(linkTargets(source), linkTargets(englishReadme));
-  }
-  assert.match(japaneseReadme, /Use ChatGPT as the brain, Codex as the hands/);
-  assert.match(japaneseReadme, /\.chat2codex-dev/);
+test("English and Chinese READMEs preserve commands, navigation, and localized subtitles", () => {
+  assert.deepEqual(commandFences(chineseReadme), commandFences(englishReadme));
+  assert.deepEqual(linkTargets(chineseReadme), linkTargets(englishReadme));
+  assert.match(englishReadme, /Use ChatGPT as the brain, Codex as the hands\./);
+  assert.match(chineseReadme, /GPT中定良谋，Codex下展妙手。/);
+  assert.match(englishReadme, /README\.zh-CN\.md/);
+  assert.match(chineseReadme, /README\.md/);
 });

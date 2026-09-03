@@ -1,6 +1,25 @@
-# Chat2Codex
-
-**Use ChatGPT as the brain, Codex as the hands.**
+<div align="center">
+  <h1>Chat2Codex</h1>
+  <hr />
+  <p><strong>Use ChatGPT as the brain, Codex as the hands.</strong></p>
+  <p>
+    <a href="README.md">English</a> ·
+    <a href="README.zh-CN.md">简体中文</a>
+  </p>
+  <p>
+    <a href="TROUBLESHOOTING.md">Troubleshooting</a> ·
+    <a href="SECURITY.md">Security</a> ·
+    <a href="CONTRIBUTING.md">Contributing</a>
+  </p>
+  <p>
+    <a href="https://github.com/pangao1990/Chat2Codex/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/pangao1990/Chat2Codex/actions/workflows/ci.yml/badge.svg" /></a>
+    <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg" /></a>
+    <img alt="macOS arm64 and x64" src="https://img.shields.io/badge/macOS-arm64%20%7C%20x64-black?logo=apple" />
+    <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0078D4?logo=windows" />
+    <img alt="Linux x64" src="https://img.shields.io/badge/Linux-x64-FCC624?logo=linux&amp;logoColor=black" />
+    <img alt="Free AI" src="https://img.shields.io/badge/Free_AI-no_API_fees-00A67E" />
+  </p>
+</div>
 
 Chat2Codex is a local, Responses-compatible bridge for the official Codex Desktop and CLI. It uses
 your authenticated ChatGPT Web session as the primary reasoning provider, keeps Codex's native
