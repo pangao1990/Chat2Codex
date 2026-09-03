@@ -20,7 +20,6 @@ import {
   storedBrowserLoginCapabilities,
 } from "./browser-login";
 import {
-  installCodexIntegration,
   preflightCodexIntegration,
   readCodexSubagentProtocol,
 } from "./codex-integration";
@@ -41,9 +40,11 @@ import {
 import { connectTunnel, createTunnelConfig, installRuntimeKey, installRuntimeKeyBytes, installTunnelClient, managedRuntimeKeyPath, stopTunnel, waitForTunnelReady } from "./tunnel";
 import { getTunnelServiceStatus, installTunnelService, restartTunnelService, stopTunnelService, tunnelServiceDefinitionMatches, uninstallTunnelService } from "./tunnel-service";
 import { VERSION } from "./version";
+import { IntegrationManager, type IntegrationMode } from "./integration";
 
 export interface SetupOptions {
   mode: RuntimeMode;
+  integrationMode?: IntegrationMode;
   subagentProtocol?: SubagentProtocol;
   port?: number;
   chromeExecutablePath?: string;
@@ -63,6 +64,7 @@ export interface SetupOptions {
 
 export interface SetupResult {
   mode: RuntimeMode;
+  integrationMode: IntegrationMode;
   configPath: string;
   loginCreated: boolean;
   serviceLoaded: boolean;
@@ -127,6 +129,8 @@ function meaningfulRuntimeChange(before: AppConfig, after: AppConfig): boolean {
     autoApproveToolCalls: before.autoApproveToolCalls,
     controlToken: before.controlToken,
     runtimeCommand: before.runtimeCommand,
+    integrationMode: before.integrationMode,
+    hybrid: before.hybrid,
     tunnel: before.tunnel,
   }) !== JSON.stringify({
     mode: after.mode,
@@ -148,6 +152,8 @@ function meaningfulRuntimeChange(before: AppConfig, after: AppConfig): boolean {
     autoApproveToolCalls: after.autoApproveToolCalls,
     controlToken: after.controlToken,
     runtimeCommand: after.runtimeCommand,
+    integrationMode: after.integrationMode,
+    hybrid: after.hybrid,
     tunnel: after.tunnel,
   });
 }
@@ -172,7 +178,7 @@ export function setupProxyIsReady(
   health: Record<string, unknown>,
   config: Pick<AppConfig, "mode" | "releaseVersion">,
 ): boolean {
-  return health.service === "codex-chatgpt-web"
+  return health.service === "chat2codex"
     && health.status === "ok"
     && health.mode === config.mode
     && health.version === config.releaseVersion
@@ -316,17 +322,24 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
     subagentProtocol: options.subagentProtocol
       ?? readCodexSubagentProtocol(existing?.subagentProtocol ?? "compatibility-v1"),
   });
+  const integrationManager = new IntegrationManager();
+  const integrationMode = options.integrationMode
+    ?? existing?.integrationMode
+    ?? "standalone";
+  config.integrationMode = integrationMode;
   delete config.purpose;
   const launcherOwned = config.browserHost === "launcher";
   if (!launcherOwned && process.platform !== "darwin") {
     throw new Error(
       "Terminal-only managed Chrome setup currently requires macOS. "
-      + "Use the Codex Web GPT launcher on Windows or Linux.",
+      + "Use the Chat2Codex launcher on Windows or Linux.",
     );
   }
-  preflightCodexIntegration(config, {
-    replaceExistingRoute: options.replaceCodexRoute,
-  });
+  if (integrationMode === "standalone") {
+    preflightCodexIntegration(config, {
+      replaceExistingRoute: options.replaceCodexRoute,
+    });
+  }
   const refreshTunnelWorker = tunnelWorkerRuntimeChanged(existing, config);
   if (existing && options.restartService) config.controlToken = randomBytes(32).toString("base64url");
   const beforeService = getServiceStatus();
@@ -342,7 +355,7 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
     }
   }
   if (beforeService.loaded && !existing) {
-    throw new Error("A codex-chatgpt-web service is loaded but its configuration is missing; refusing to replace an unverifiable process");
+    throw new Error("A chat2codex service is loaded but its configuration is missing; refusing to replace an unverifiable process");
   }
 
   let loginCreated = false;
@@ -456,12 +469,13 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
     launcherOwned && existing && existing.browserHost !== "launcher",
   );
   if (!migratingTerminalRuntime) removeLegacyRuntimeArtifacts(config);
-  installCodexIntegration(config, {
+  integrationManager.install(config, integrationMode, "CC Switch", {
     replaceExistingRoute: options.replaceCodexRoute,
   });
 
   return {
     mode: config.mode,
+    integrationMode,
     configPath: getConfigPath(),
     loginCreated,
     serviceLoaded: launcherOwned ? false : getServiceStatus().loaded,

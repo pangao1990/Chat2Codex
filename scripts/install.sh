@@ -1,11 +1,16 @@
 #!/bin/sh
 set -eu
 
-REPOSITORY="${CODEX_CHATGPT_WEB_REPOSITORY:-miuuyy/codex-chatgpt-web}"
-VERSION="${CODEX_CHATGPT_WEB_VERSION:-4.0.8}"
-BIN_DIR="${CODEX_CHATGPT_WEB_BIN_DIR:-$HOME/.local/bin}"
-LIB_DIR="${CODEX_CHATGPT_WEB_LIB_DIR:-$HOME/.local/lib/codex-chatgpt-web}"
-DOC_DIR="${CODEX_CHATGPT_WEB_DOC_DIR:-$HOME/.local/share/doc/codex-chatgpt-web}"
+REPOSITORY="${CHAT2CODEX_REPOSITORY:-pangao1990/Chat2Codex}"
+VERSION="${CHAT2CODEX_VERSION:-0.1.0-alpha.0}"
+BIN_DIR="${CHAT2CODEX_BIN_DIR:-$HOME/.local/bin}"
+LIB_DIR="${CHAT2CODEX_LIB_DIR:-$HOME/.local/lib/chat2codex}"
+DOC_DIR="${CHAT2CODEX_DOC_DIR:-$HOME/.local/share/doc/chat2codex}"
+
+if ! printf '%s\n' "$REPOSITORY" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'; then
+  echo "Invalid GitHub repository: $REPOSITORY" >&2
+  exit 1
+fi
 
 if [ "$(uname -s)" != "Darwin" ]; then
   echo "The terminal-only installer supports macOS only; use the desktop launcher on Windows or Linux" >&2
@@ -18,9 +23,9 @@ case "$(uname -m)" in
   *) echo "Unsupported macOS architecture: $(uname -m)" >&2; exit 1 ;;
 esac
 
-ASSET="codex-chatgpt-web-darwin-$ARCH.tar.gz"
+ASSET="chat2codex-darwin-$ARCH.tar.gz"
 BASE_URL="https://github.com/$REPOSITORY/releases/download/v$VERSION"
-TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/codex-chatgpt-web.XXXXXX")"
+TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/chat2codex.XXXXXX")"
 STAGE_DIR="$LIB_DIR/.stage-$VERSION-$$"
 TARGET_DIR="$LIB_DIR/$VERSION"
 BACKUP_DIR="$LIB_DIR/.previous-$VERSION-$$"
@@ -49,11 +54,11 @@ done
 mkdir -p "$LIB_DIR" "$BIN_DIR" "$DOC_DIR"
 mkdir "$STAGE_DIR"
 tar -xzf "$TEMP_DIR/$ASSET" -C "$STAGE_DIR"
-if [ ! -x "$STAGE_DIR/bin/codex-chatgpt-web" ] || [ ! -x "$STAGE_DIR/runtime/bun" ]; then
+if [ ! -x "$STAGE_DIR/bin/chat2codex" ] || [ ! -x "$STAGE_DIR/runtime/bun" ]; then
   echo "Runtime archive is incomplete" >&2
   exit 1
 fi
-if [ "$("$STAGE_DIR/bin/codex-chatgpt-web" --version)" != "$VERSION" ]; then
+if [ "$("$STAGE_DIR/bin/chat2codex" --version)" != "$VERSION" ]; then
   echo "Runtime archive version does not match $VERSION" >&2
   exit 1
 fi
@@ -66,9 +71,9 @@ if ! mv "$STAGE_DIR" "$TARGET_DIR"; then
   exit 1
 fi
 
-ln -sfn "$TARGET_DIR/bin/codex-chatgpt-web" "$BIN_DIR/.codex-chatgpt-web.next"
-mv -f "$BIN_DIR/.codex-chatgpt-web.next" "$BIN_DIR/codex-chatgpt-web"
-rm -f "$BIN_DIR/codex-chatgpt-web.legacy-standalone"
+ln -sfn "$TARGET_DIR/bin/chat2codex" "$BIN_DIR/.chat2codex.next"
+mv -f "$BIN_DIR/.chat2codex.next" "$BIN_DIR/chat2codex"
+rm -f "$BIN_DIR/chat2codex.legacy-standalone"
 for DOC in LICENSE Bun-1.4.0.md THIRD_PARTY_NOTICES.txt; do
   install -m 0644 "$TEMP_DIR/$DOC" "$DOC_DIR/$DOC"
 done
@@ -76,7 +81,7 @@ if [ -e "$BACKUP_DIR" ]; then rm -rf "$BACKUP_DIR"; fi
 
 echo "Installed $TARGET_DIR"
 if [ "$#" -gt 0 ]; then
-  "$TARGET_DIR/bin/codex-chatgpt-web" setup "$@"
+  "$TARGET_DIR/bin/chat2codex" setup "$@"
   exit 0
 fi
-echo "Next: $BIN_DIR/codex-chatgpt-web setup --browser-only --acknowledge-unofficial"
+echo "Next: $BIN_DIR/chat2codex setup --browser-only --acknowledge-unofficial"

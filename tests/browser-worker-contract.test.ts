@@ -2443,7 +2443,7 @@ test("visible DOM trace emits one complete commentary paragraph before the next 
 
 test("response DOM separates streaming commentary from the final Markdown answer", () => {
   const workerSource = readFileSync(new URL("../src/adapters/chatgpt-web/browser-worker.ts", import.meta.url), "utf8");
-  expect(workerSource).toContain("__CODEX_WEB_GPT_RESPONSE_OBSERVERS__");
+  expect(workerSource).toContain("__CHAT2CODEX_RESPONSE_OBSERVERS__");
   expect(workerSource).toContain("if (options.knownKey === observerKey) return { key: observerKey }");
   expect(workerSource).toContain("new MutationObserver(() =>");
   expect(workerSource).toContain('const allMarkdownRoots = [...root.querySelectorAll<HTMLElement>(".markdown")]');

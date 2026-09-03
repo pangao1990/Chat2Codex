@@ -6,9 +6,8 @@ const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const { pipeline } = require("node:stream/promises");
 
-const REPOSITORY = "miuuyy/codex-chatgpt-web";
-const RELEASE_API_URL = `https://api.github.com/repos/${REPOSITORY}/releases/latest`;
-const USER_AGENT = "codex-web-gpt-launcher-updater";
+const DEFAULT_REPOSITORY = process.env.CHAT2CODEX_REPOSITORY?.trim() || "pangao1990/Chat2Codex";
+const USER_AGENT = "chat2codex-launcher-updater";
 const MAX_REDIRECTS = 5;
 
 function parseVersion(value) {
@@ -43,13 +42,13 @@ function releaseVersion(tagName) {
 
 function releaseAssetName(version, platform = process.platform, arch = process.arch) {
   if (platform === "darwin" && ["arm64", "x64"].includes(arch)) {
-    return `codex-web-gpt-${version}-mac-${arch}.zip`;
+    return `chat2codex-${version}-mac-${arch}.zip`;
   }
   if (platform === "win32" && arch === "x64") {
-    return `codex-web-gpt-${version}-win-x64.exe`;
+    return `chat2codex-${version}-win-x64.exe`;
   }
   if (platform === "linux" && arch === "x64") {
-    return `codex-web-gpt-${version}-linux-x64.AppImage`;
+    return `chat2codex-${version}-linux-x64.AppImage`;
   }
   return null;
 }
@@ -62,9 +61,16 @@ function expectedChecksum(contents, assetName) {
   throw new Error(`checksums.txt has no entry for ${assetName}`);
 }
 
-function validateReleaseAssetUrl(raw, version, assetName) {
+function normalizeRepository(value) {
+  const repository = String(value || "").trim();
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) ? repository : null;
+}
+
+function validateReleaseAssetUrl(raw, version, assetName, repository = DEFAULT_REPOSITORY) {
+  const normalizedRepository = normalizeRepository(repository);
+  if (!normalizedRepository) throw new Error("Chat2Codex release repository is not configured");
   const url = new URL(raw);
-  const expectedPath = `/${REPOSITORY}/releases/download/v${version}/${assetName}`;
+  const expectedPath = `/${normalizedRepository}/releases/download/v${version}/${assetName}`;
   if (url.protocol !== "https:" || url.hostname !== "github.com" || url.pathname !== expectedPath) {
     throw new Error(`GitHub returned an unexpected release asset URL for ${assetName}`);
   }
@@ -150,7 +156,7 @@ function findMacApplication(root) {
   const appEntry = entries.find((entry) => entry.isDirectory() && entry.name.endsWith(".app"));
   if (!appEntry) throw new Error("The macOS update archive does not contain an application bundle");
   const application = path.join(root, appEntry.name);
-  const executable = path.join(application, "Contents", "MacOS", "Codex Web GPT");
+  const executable = path.join(application, "Contents", "MacOS", "Chat2Codex");
   if (!fs.existsSync(executable) || !fs.statSync(executable).isFile()) {
     throw new Error("The macOS update archive is incomplete");
   }
@@ -181,12 +187,12 @@ function buildJob({ version, platform, executablePath, assetPath, stagingRoot, t
     };
   }
   if (platform === "linux") {
-    const target = process.env.CODEX_WEB_GPT_APPIMAGE?.trim()
+    const target = process.env.CHAT2CODEX_APPIMAGE?.trim()
       || process.env.APPIMAGE?.trim();
     if (!target || !path.isAbsolute(target)) {
       throw new Error("The running Linux AppImage path is unavailable; reinstall with install-launcher.sh");
     }
-    const wrapper = process.env.CODEX_WEB_GPT_LAUNCHER_EXECUTABLE?.trim();
+    const wrapper = process.env.CHAT2CODEX_LAUNCHER_EXECUTABLE?.trim();
     if (!wrapper || !path.isAbsolute(wrapper)) {
       throw new Error("Linux auto-update requires the stable install-launcher.sh wrapper; reinstall once");
     }
@@ -205,9 +211,11 @@ function buildJob({ version, platform, executablePath, assetPath, stagingRoot, t
   throw new Error(`Updates are not supported on ${platform}`);
 }
 
-function defaultDependencies() {
+function defaultDependencies(repository) {
   return {
-    fetchRelease: async () => JSON.parse(await downloadText(RELEASE_API_URL)),
+    fetchRelease: async () => JSON.parse(await downloadText(
+      `https://api.github.com/repos/${repository}/releases/latest`,
+    )),
     downloadText,
     downloadFile,
     sha256,
@@ -254,11 +262,15 @@ function createUpdateController({
   logsDirectory,
   publish,
   logger,
+  repository = DEFAULT_REPOSITORY,
   dependencies = {},
 }) {
-  const deps = { ...defaultDependencies(), ...dependencies };
+  const normalizedRepository = normalizeRepository(repository);
+  const deps = { ...defaultDependencies(normalizedRepository), ...dependencies };
   const supportedAsset = releaseAssetName(currentVersion, platform, arch);
-  let state = packaged && supportedAsset ? { status: "idle" } : { status: "disabled" };
+  let state = packaged && supportedAsset && normalizedRepository
+    ? { status: "idle" }
+    : { status: "disabled" };
   let checked = false;
   let pending = null;
   let candidate = null;
@@ -291,8 +303,8 @@ function createUpdateController({
       candidate = {
         version,
         assetName,
-        assetUrl: validateReleaseAssetUrl(asset.browser_download_url, version, assetName),
-        checksumsUrl: validateReleaseAssetUrl(checksums.browser_download_url, version, "checksums.txt"),
+        assetUrl: validateReleaseAssetUrl(asset.browser_download_url, version, assetName, normalizedRepository),
+        checksumsUrl: validateReleaseAssetUrl(checksums.browser_download_url, version, "checksums.txt", normalizedRepository),
       };
       logger?.info("launcher.update_available", { currentVersion, version, platform, arch });
       return transition({ status: "available", version });
@@ -309,7 +321,7 @@ function createUpdateController({
     const available = candidate;
     pending = (async () => {
       transition({ status: "downloading", version: available.version });
-      const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "codex-web-gpt-update-"));
+      const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "chat2codex-update-"));
       try {
         const checksums = await deps.downloadText(available.checksumsUrl);
         const expected = expectedChecksum(checksums, available.assetName);
@@ -379,6 +391,7 @@ module.exports = {
   createUpdateController,
   expectedChecksum,
   macApplicationPath,
+  normalizeRepository,
   parseVersion,
   releaseAssetName,
   releaseVersion,

@@ -23,8 +23,8 @@ test("the full verification gate audits launcher dependencies", () => {
 });
 
 test("launcher publishes native packages for all supported desktop operating systems", () => {
-  assert.equal(manifest.build.appId, "dev.codexwebgpt.launcher");
-  assert.equal(manifest.build.artifactName, "codex-web-gpt-${version}-${os}-${arch}.${ext}");
+  assert.equal(manifest.build.appId, "dev.chat2codex.app");
+  assert.equal(manifest.build.artifactName, "chat2codex-${version}-${os}-${arch}.${ext}");
   assert.deepEqual(manifest.build.mac.target, ["dmg", "zip"]);
   assert.deepEqual(
     manifest.build.mac.signIgnore,
@@ -57,7 +57,7 @@ test("release installers resolve checksummed native launcher assets", () => {
   }
   assert.match(shellInstaller, /PLATFORM="mac"/);
   assert.match(shellInstaller, /PLATFORM="linux"/);
-  assert.match(shellInstaller, /codex-web-gpt\.desktop/);
+  assert.match(shellInstaller, /chat2codex\.desktop/);
   assert.match(shellInstaller, /--appimage-extract/);
   assert.match(packager, /-linux-x86_64\(\?=\\\.\).*?-linux-x64/);
   assert.match(packager, /const executable = "node"/);
@@ -78,7 +78,7 @@ test("release installers resolve checksummed native launcher assets", () => {
       < shellInstaller.indexOf('"$TEMP_DIR/$ASSET" --appimage-extract'),
     "the downloaded AppImage must be executable before it is inspected",
   );
-  assert.match(windowsInstaller, /codex-web-gpt-\$Version-win-\$Arch\.exe/);
+  assert.match(windowsInstaller, /chat2codex-\$Version-win-\$Arch\.exe/);
   assert.match(windowsInstaller, /\[Environment\]::Is64BitOperatingSystem/);
   assert.doesNotMatch(windowsInstaller, /RuntimeInformation/);
   assert.match(windowsInstaller, /function Test-IsFullyQualifiedWindowsPath/);
@@ -87,11 +87,11 @@ test("release installers resolve checksummed native launcher assets", () => {
   const windowsPathPattern = windowsInstaller.match(/return \$Path -match '([^']+)'/)?.[1];
   assert.ok(windowsPathPattern, "the Windows installer must expose its absolute-path contract");
   const fullyQualifiedWindowsPath = new RegExp(windowsPathPattern);
-  assert.equal(fullyQualifiedWindowsPath.test("C:\\Users\\tester\\Codex Web GPT"), true);
-  assert.equal(fullyQualifiedWindowsPath.test("\\\\server\\share\\Codex Web GPT"), true);
-  assert.equal(fullyQualifiedWindowsPath.test("C:Codex Web GPT"), false);
-  assert.equal(fullyQualifiedWindowsPath.test("\\Codex Web GPT"), false);
-  assert.equal(fullyQualifiedWindowsPath.test("Codex Web GPT"), false);
+  assert.equal(fullyQualifiedWindowsPath.test("C:\\Users\\tester\\Chat2Codex"), true);
+  assert.equal(fullyQualifiedWindowsPath.test("\\\\server\\share\\Chat2Codex"), true);
+  assert.equal(fullyQualifiedWindowsPath.test("C:Chat2Codex"), false);
+  assert.equal(fullyQualifiedWindowsPath.test("\\Chat2Codex"), false);
+  assert.equal(fullyQualifiedWindowsPath.test("Chat2Codex"), false);
   assert.ok(windowsInstaller.includes(`HKCU:\\Software\\${manifest.build.nsis.guid}`));
   assert.ok(devProfile.includes(`WINDOWS_LAUNCHER_GUID = "${manifest.build.nsis.guid}"`));
   assert.match(windowsInstaller, /Get-ItemPropertyValue[\s\S]*InstallLocation/);
@@ -136,7 +136,7 @@ test("CI packages and smoke-launches on macOS, Windows, and Linux", () => {
   assert.match(release, /archlinux:base/);
   assert.match(release, /prepare-windows-baseline-bun\.ps1 -Version 1\.4\.0/);
   assert.match(release, /codesign --verify --deep --strict --verbose=2/);
-  assert.match(release, /Codex Web GPT\.app/);
+  assert.match(release, /Chat2Codex\.app/);
   assert.doesNotMatch(release, /gh release create[\s\S]*?--draft/);
 });
 
@@ -148,9 +148,9 @@ test("Linux AppImage fallback uses one owned extraction and removes it on exit",
   // macOS and failed for everyone running `bun test` locally. Returning early is the one form both
   // runners agree on.
   if (process.platform !== "linux") return;
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "codex-web-gpt-appimage-runner-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "chat2codex-appimage-runner-"));
   const runtime = path.join(root, "runtime");
-  const appImage = path.join(root, "Codex Web GPT.AppImage");
+  const appImage = path.join(root, "Chat2Codex.AppImage");
   const appRunSource = path.join(root, "AppRun");
   const marker = path.join(root, "launched");
   const runner = path.join(launcherRoot, "assets", "linux-appimage-runner.sh");
@@ -168,7 +168,7 @@ test("Linux AppImage fallback uses one owned extraction and removes it on exit",
     "chmod 0755 squashfs-root/AppRun",
     "",
   ].join("\n"), { mode: 0o755 });
-  const fallbackRoot = path.join(runtime, `codex-web-gpt-appimage-${process.getuid?.() ?? 0}`);
+  const fallbackRoot = path.join(runtime, `chat2codex-appimage-${process.getuid?.() ?? 0}`);
   const stale = path.join(fallbackRoot, "run.stale");
   const active = path.join(fallbackRoot, "run.active");
   const ownerStart = fs.readFileSync(`/proc/${process.pid}/stat`, "utf8")
@@ -240,10 +240,10 @@ test("Windows packages embed the checksummed Bun baseline runtime for CPUs witho
     path.join(repositoryRoot, "scripts", "prepare-windows-baseline-bun.ps1"),
     "utf8",
   );
-  assert.match(builder, /CODEX_CHATGPT_WEB_EMBEDDED_BUN/);
+  assert.match(builder, /CHAT2CODEX_EMBEDDED_BUN/);
   assert.match(builder, /Embedded Bun must be/);
   assert.match(baseline, /bun-windows-x64-baseline\.zip/);
   assert.match(baseline, /SHASUMS256\.txt/);
   assert.match(baseline, /Get-FileHash[^\n]+SHA256/);
-  assert.match(baseline, /CODEX_CHATGPT_WEB_EMBEDDED_BUN=/);
+  assert.match(baseline, /CHAT2CODEX_EMBEDDED_BUN=/);
 });

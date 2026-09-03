@@ -5,7 +5,7 @@ import type { AppConfig } from "./config";
 import { assertDurableRuntimeCommand, atomicWriteFile, getConfigDir } from "./config";
 import { runCommand, runChecked } from "./process";
 
-const LABEL = "io.github.codex-chatgpt-web.daemon";
+const LABEL = "io.github.chat2codex.daemon";
 
 export interface ServiceStatus {
   supported: boolean;
@@ -71,7 +71,7 @@ ${args.map(arg => `    <string>${xml(arg)}</string>`).join("\n")}
   </array>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>CODEX_CHATGPT_WEB_HOME</key>
+    <key>CHAT2CODEX_HOME</key>
     <string>${xml(getConfigDir())}</string>
   </dict>
   <key>RunAtLoad</key>
@@ -95,7 +95,7 @@ function assertMacOs(): void {
   if (process.platform !== "darwin") {
     throw new Error(
       "Terminal-managed background services require macOS. "
-      + "Use the Codex Web GPT launcher on Windows or Linux.",
+      + "Use the Chat2Codex launcher on Windows or Linux.",
     );
   }
 }

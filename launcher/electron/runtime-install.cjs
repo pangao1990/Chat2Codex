@@ -49,7 +49,7 @@ function readRuntimeManifest(runtimeRoot, { version, platform, arch, bundleId })
       `Runtime manifest is invalid: ${manifestPath}: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  const expectedLauncher = `bin/${platform === "win32" ? "codex-chatgpt-web.cmd" : "codex-chatgpt-web"}`;
+  const expectedLauncher = `bin/${platform === "win32" ? "chat2codex.cmd" : "chat2codex"}`;
   if (manifest?.schemaVersion !== 2
     || manifest.appVersion !== version
     || manifest.platform !== platform

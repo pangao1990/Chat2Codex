@@ -41,7 +41,7 @@ test("window state caps corrupt oversized dimensions", () => {
 });
 
 test("window state is stored atomically with owner-only permissions", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "codex-web-gpt-window-state-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "chat2codex-window-state-"));
   const file = path.join(root, "window-state.json");
   try {
     const state = {

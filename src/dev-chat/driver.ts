@@ -83,14 +83,14 @@ interface DevToolCall {
 }
 
 export const DEV_CHAT_SYSTEM_INSTRUCTIONS = [
-  "You are running inside the Codex Web GPT DEV outer-harness simulator.",
+  "You are running inside the Chat2Codex DEV outer-harness simulator.",
   "Behave like the normal Codex model backend and use the available Codex Native tools whenever they help answer the user's request.",
   "Every outer tool result is an explicit simulation receipt. No command, file edit, image read, user prompt, or external side effect actually occurs.",
   "Never describe a simulated receipt as a real-world effect. Continue reasoning from the receipt exactly as test evidence for the transport flow.",
 ].join(" ");
 
 export const DEV_CHAT_BROWSER_ONLY_INSTRUCTIONS = [
-  "You are running inside the Codex Web GPT DEV outer-harness simulator.",
+  "You are running inside the Chat2Codex DEV outer-harness simulator.",
   "Behave like the normal Codex model backend.",
   "This browser-only DEV profile exposes no outer tools. Do not claim that commands, file edits, UI actions, or external side effects occurred.",
 ].join(" ");
@@ -506,7 +506,7 @@ export class DevChatDriver {
     let finalText = "";
     for (let round = 0; round < 64; round += 1) {
       const body = requestBody(state, this.cwd, turnId, workingInput, false, this.config.mode === "full");
-      const response = await responseRequest(new Request("http://codex-web-gpt.dev/v1/responses", {
+      const response = await responseRequest(new Request("http://chat2codex.dev/v1/responses", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -619,7 +619,7 @@ export class DevChatDriver {
     }
     const compactTurnId = id("dev_compact_turn");
     emit({ type: "compaction_start", reason, inputItems: input.length });
-    const response = await compactRequest(new Request("http://codex-web-gpt.dev/v1/responses/compact", {
+    const response = await compactRequest(new Request("http://chat2codex.dev/v1/responses/compact", {
       method: "POST",
       headers: {
         "content-type": "application/json",

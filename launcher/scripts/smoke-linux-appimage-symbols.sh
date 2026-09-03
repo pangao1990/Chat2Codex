@@ -10,7 +10,7 @@ case "$APPIMAGE_PATH" in
   /*) ;;
   *) echo "AppImage smoke requires an absolute path" >&2; exit 64 ;;
 esac
-TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/codex-web-gpt-appimage-smoke.XXXXXX")"
+TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/chat2codex-appimage-smoke.XXXXXX")"
 trap 'rm -rf "$TEMP_DIR"' EXIT HUP INT TERM
 SMOKE_APPIMAGE="$TEMP_DIR/$(basename -- "$APPIMAGE_PATH")"
 cp "$APPIMAGE_PATH" "$SMOKE_APPIMAGE"

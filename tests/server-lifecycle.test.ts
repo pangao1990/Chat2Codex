@@ -576,7 +576,7 @@ test("a drained runtime rejects new model-catalog work before shutdown", async (
     expect(await models.json()).toMatchObject({
       error: {
         type: "server_error",
-        message: "codex-chatgpt-web is draining for a requested service operation",
+        message: "chat2codex is draining for a requested service operation",
       },
     });
 

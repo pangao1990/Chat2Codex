@@ -26,30 +26,37 @@ import { installRuntimeKeyBytes, managedRuntimeKeyPath, stopTunnel, tunnelStatus
 import { getTunnelServiceStatus, restartTunnelService, startTunnelService, stopTunnelService, uninstallTunnelService } from "./tunnel-service";
 import { VERSION } from "./version";
 import { runDevCommand } from "./dev-chat/cli";
+import {
+  ConfigOwnershipError,
+  IntegrationManager,
+  detectExternalManager,
+  externalProviderConfiguration,
+} from "./integration";
 
-const HELP = `codex-chatgpt-web ${VERSION}
+const HELP = `chat2codex ${VERSION}
 
 Focused ChatGPT web-backed models for the native Codex harness.
 
 Usage:
-  codex-chatgpt-web setup --browser-only [options]
-  codex-chatgpt-web setup --full --tunnel-id ID --runtime-key-file PATH [options]
-  codex-chatgpt-web login
-  codex-chatgpt-web doctor [--json]
-  codex-chatgpt-web route <status|connect|disconnect>
-  codex-chatgpt-web subagents <status|compatibility-v1|native>
-  codex-chatgpt-web browser check
-  codex-chatgpt-web dev launcher
-  codex-chatgpt-web dev status [--json]
-  codex-chatgpt-web dev setup <--browser-only|--full> [options]
-  codex-chatgpt-web dev chat NAME [--model MODEL] [MESSAGE]
-  codex-chatgpt-web dev list
-  codex-chatgpt-web serve
-  codex-chatgpt-web mcp [--broker-socket PATH]
-  codex-chatgpt-web service <status|install|start|restart|stop|cancel-turns>
-  codex-chatgpt-web tunnel <status|start|restart|stop|key-import>
-  codex-chatgpt-web open <tunnels|runtime-keys|connectors>
-  codex-chatgpt-web uninstall --yes
+  chat2codex setup --browser-only [options]
+  chat2codex setup --full --tunnel-id ID --runtime-key-file PATH [options]
+  chat2codex login
+  chat2codex doctor [--json]
+  chat2codex route <status|connect|disconnect>
+  chat2codex integration <status|export>
+  chat2codex subagents <status|compatibility-v1|native>
+  chat2codex browser check
+  chat2codex dev launcher
+  chat2codex dev status [--json]
+  chat2codex dev setup <--browser-only|--full> [options]
+  chat2codex dev chat NAME [--model MODEL] [MESSAGE]
+  chat2codex dev list
+  chat2codex serve
+  chat2codex mcp [--broker-socket PATH]
+  chat2codex service <status|install|start|restart|stop|cancel-turns>
+  chat2codex tunnel <status|start|restart|stop|key-import>
+  chat2codex open <tunnels|runtime-keys|connectors>
+  chat2codex uninstall --yes
 
 Setup options:
   --browser-only               Account-eligible Web models, full context/images, no local tools or tunnel
@@ -64,6 +71,7 @@ Setup options:
   --tunnel-id ID               Existing OpenAI tunnel id (full mode)
   --runtime-key-file PATH      File containing a Tunnels Read+Use runtime key
   --replace-codex-route        Reversibly replace an existing openai_base_url
+  --integration-mode MODE      standalone (default) or external-manager
   --subagent-protocol MODE     compatibility-v1 (default) or native (advanced)
   --restart-service            Explicitly restart this project's daemon after an update
   --login                      Refresh the stored ChatGPT login even if one exists
@@ -73,7 +81,7 @@ Setup options:
   --acknowledge-unofficial     Accept the one-time unofficial-browser-automation notice
 
 Global:
-  --home PATH                  Override ~/.codex-chatgpt-web
+  --home PATH                  Override ~/.chat2codex
   -h, --help
   -v, --version
 `;
@@ -129,9 +137,9 @@ function assertNoArgs(args: string[]): void {
 }
 
 function authorizeLauncherControl(operation: string): void {
-  const descriptorPath = process.env.CODEX_CHATGPT_WEB_BROWSER_HOST_DESCRIPTOR?.trim();
-  const supplied = process.env.CODEX_WEB_GPT_LAUNCHER_CONTROL_TOKEN?.trim();
-  delete process.env.CODEX_WEB_GPT_LAUNCHER_CONTROL_TOKEN;
+  const descriptorPath = process.env.CHAT2CODEX_BROWSER_HOST_DESCRIPTOR?.trim();
+  const supplied = process.env.CHAT2CODEX_LAUNCHER_CONTROL_TOKEN?.trim();
+  delete process.env.CHAT2CODEX_LAUNCHER_CONTROL_TOKEN;
   if (!descriptorPath || !supplied) {
     throw new Error(`Launcher-controlled ${operation} requires a live launcher authorization`);
   }
@@ -218,7 +226,7 @@ async function loginCommand(args: string[]): Promise<void> {
     assertNoArgs(args);
     const config = loadConfig();
     if (config.browserHost === "launcher") {
-      throw new Error("ChatGPT login is owned by the launcher; open Codex Web GPT and use its Sign in step");
+      throw new Error("ChatGPT login is owned by the launcher; open Chat2Codex and use its Sign in step");
     }
     const result = await loginToChatGpt(config);
     stdout.write(`ChatGPT login stored at ${result.storageStatePath}\n`);
@@ -259,6 +267,13 @@ async function setupCommand(args: string[]): Promise<void> {
     mode: full ? "full" : "browser-only",
     ...(portRaw ? { port: Number(portRaw) } : {}),
   };
+  const integrationMode = takeOption(args, "--integration-mode");
+  if (integrationMode !== undefined) {
+    if (integrationMode !== "standalone" && integrationMode !== "external-manager") {
+      throw new Error("--integration-mode must be standalone or external-manager");
+    }
+    options.integrationMode = integrationMode;
+  }
   const subagentProtocol = takeOption(args, "--subagent-protocol");
   if (subagentProtocol !== undefined) {
     if (subagentProtocol !== "compatibility-v1" && subagentProtocol !== "native") {
@@ -318,6 +333,7 @@ async function setupCommand(args: string[]): Promise<void> {
 
   const result = await setup(options);
   stdout.write(`Setup complete: ${result.mode}\n`);
+  stdout.write(`Integration: ${result.integrationMode}\n`);
   stdout.write(`Config: ${result.configPath}\n`);
   if (result.connectorSetupRequired) {
     stdout.write("One account-level step remains: attach the tunnel to the ChatGPT connector named in config.\n");
@@ -337,6 +353,10 @@ async function doctorCommand(args: string[]): Promise<void> {
 async function routeCommand(args: string[]): Promise<void> {
   const action = args.shift() ?? "status";
   assertNoArgs(args);
+  const managedState = new IntegrationManager().readState();
+  if (managedState?.mode === "external-manager" && action !== "status") {
+    throw new ConfigOwnershipError("CC Switch owns Codex configuration; change the route in CC Switch");
+  }
   const result = action === "status"
     ? (() => {
         const status = inspectCodexIntegration();
@@ -354,6 +374,25 @@ async function routeCommand(args: string[]): Promise<void> {
         : undefined;
   if (!result) throw new Error(`Unknown route action: ${action}`);
   stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+}
+
+async function integrationCommand(args: string[]): Promise<void> {
+  const action = args.shift() ?? "status";
+  assertNoArgs(args);
+  const manager = new IntegrationManager();
+  if (action === "status") {
+    stdout.write(`${JSON.stringify({
+      state: manager.readState() ?? null,
+      detection: detectExternalManager(),
+    }, null, 2)}\n`);
+    return;
+  }
+  if (action === "export") {
+    const config = existsSync(getConfigPath()) ? loadConfig() : defaultConfig();
+    stdout.write(`${externalProviderConfiguration(`http://${config.host}:${config.port}/v1`)}\n`);
+    return;
+  }
+  throw new Error("Integration command must be one of: status, export");
 }
 
 async function subagentsCommand(args: string[]): Promise<void> {
@@ -461,7 +500,7 @@ async function uninstallCommand(args: string[]): Promise<void> {
   const config = existsSync(getConfigPath()) ? loadConfig() : undefined;
   if (config?.browserHost === "launcher" && !launcherControl) {
     throw new Error(
-      "Launcher-owned integration must be removed from Codex Web GPT Settings so the active runtime can be drained safely.",
+      "Launcher-owned integration must be removed from Chat2Codex Settings so the active runtime can be drained safely.",
     );
   }
   if (!config && process.platform === "darwin" && getServiceStatus().installed) {
@@ -474,7 +513,8 @@ async function uninstallCommand(args: string[]): Promise<void> {
     stopTunnel(config);
   }
   if (config && process.platform === "darwin" && !launcherRuntimeStopped) await uninstallService(config);
-  uninstallCodexIntegration();
+  const integrationState = new IntegrationManager().readState();
+  if (integrationState?.mode !== "external-manager") uninstallCodexIntegration();
   if (!keepData) rmSync(getConfigDir(), { recursive: true, force: true });
   stdout.write(keepData ? "Uninstalled; private application data was preserved.\n" : "Uninstalled and removed private application data.\n");
 }
@@ -482,7 +522,7 @@ async function uninstallCommand(args: string[]): Promise<void> {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const home = takeOption(args, "--home");
-  if (home) process.env.CODEX_CHATGPT_WEB_HOME = home;
+  if (home) process.env.CHAT2CODEX_HOME = home;
   if (takeFlag(args, "--help") || takeFlag(args, "-h")) {
     stdout.write(HELP);
     return;
@@ -493,13 +533,14 @@ async function main(): Promise<void> {
   }
   const command = args.shift() ?? "help";
   if (command === "dev" && home) {
-    throw new Error("--home does not apply to DEV mode; use CODEX_WEB_GPT_DEV_HOME for an explicit isolated DEV profile");
+    throw new Error("--home does not apply to DEV mode; use CHAT2CODEX_DEV_HOME for an explicit isolated DEV profile");
   }
   if (command === "help") stdout.write(HELP);
   else if (command === "setup") await setupCommand(args);
   else if (command === "login") await loginCommand(args);
   else if (command === "doctor" || command === "status") await doctorCommand(args);
   else if (command === "route") await routeCommand(args);
+  else if (command === "integration") await integrationCommand(args);
   else if (command === "subagents") await subagentsCommand(args);
   else if (command === "browser") {
     const action = args.shift();
@@ -517,7 +558,7 @@ async function main(): Promise<void> {
     assertNoArgs(args);
     const config = loadConfig();
     const server = startServer(config);
-    stdout.write(`codex-chatgpt-web ${VERSION} listening on http://${config.host}:${server.port}/v1 (${config.mode})\n`);
+    stdout.write(`chat2codex ${VERSION} listening on http://${config.host}:${server.port}/v1 (${config.mode})\n`);
     await new Promise<void>(() => {});
   } else if (command === "dev") await runDevCommand(args);
   else if (command === "mcp") await runChatGptMcpMain(args);
@@ -529,6 +570,6 @@ async function main(): Promise<void> {
 }
 
 main().catch(error => {
-  process.stderr.write(`codex-chatgpt-web: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.stderr.write(`chat2codex: ${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
 });

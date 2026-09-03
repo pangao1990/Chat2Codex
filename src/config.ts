@@ -5,6 +5,9 @@ import { basename, delimiter, dirname, isAbsolute, join, resolve, sep, win32 } f
 import { tmpdir } from "node:os";
 import type { CodexProviderConfig } from "./types";
 import { VERSION } from "./version";
+import type { HybridRoutingConfig } from "./hybrid/config";
+import { DEFAULT_HYBRID_ROUTING_CONFIG, validateHybridRoutingConfig } from "./hybrid/config";
+import type { IntegrationMode } from "./integration/mode";
 
 export type RuntimeMode = "browser-only" | "full";
 export type BrowserHostMode = "managed-chrome" | "launcher";
@@ -85,6 +88,8 @@ export interface AppConfig {
   autoApproveToolCalls: boolean;
   controlToken: string;
   runtimeCommand: string[];
+  integrationMode: IntegrationMode;
+  hybrid: HybridRoutingConfig;
   acknowledgedUnofficialAt?: string;
   tunnel?: TunnelConfig;
 }
@@ -96,8 +101,8 @@ export function expandUserPath(value: string): string {
 }
 
 export function getConfigDir(): string {
-  const configured = process.env.CODEX_CHATGPT_WEB_HOME?.trim();
-  return resolve(expandUserPath(configured || join(homedir(), ".codex-chatgpt-web")));
+  const configured = process.env.CHAT2CODEX_HOME?.trim();
+  return resolve(expandUserPath(configured || join(homedir(), ".chat2codex")));
 }
 
 export function getConfigPath(): string {
@@ -111,7 +116,7 @@ export function isWindowsPipeEndpoint(value: string): boolean {
 export function defaultBrokerEndpoint(home = getConfigDir(), platform = process.platform): string {
   if (platform !== "win32") return join(home, "runtime", "turn-broker.sock");
   const identity = createHash("sha256").update(resolve(home).toLowerCase()).digest("hex").slice(0, 20);
-  return `\\\\.\\pipe\\codex-chatgpt-web-${identity}`;
+  return `\\\\.\\pipe\\chat2codex-${identity}`;
 }
 
 export function resolveBrokerEndpoint(value: string): string {
@@ -186,6 +191,8 @@ export function defaultConfig(mode: RuntimeMode = "browser-only"): AppConfig {
     autoApproveToolCalls: false,
     controlToken: randomBytes(32).toString("base64url"),
     runtimeCommand: currentRuntimeCommand(),
+    integrationMode: "standalone",
+    hybrid: structuredClone(DEFAULT_HYBRID_ROUTING_CONFIG),
   };
 }
 
@@ -195,7 +202,7 @@ export function currentRuntimeCommand(): string[] {
     ? installedBunExecutable()
     : undefined;
   return runtimeCommandForProcess({
-    launcher: process.env.CODEX_CHATGPT_WEB_LAUNCHER,
+    launcher: process.env.CHAT2CODEX_LAUNCHER,
     executable: process.execPath,
     entry: typeof Bun !== "undefined" ? Bun.main : process.argv[1],
     bunExecutable,
@@ -219,8 +226,7 @@ export function installedBunExecutable({
     .filter(Boolean)
     .map(part => join(part, executableName));
   const discovered = [
-    process.env.CODEX_CHATGPT_WEB_BUN,
-    process.env.CODEX_WEB_GPT_BUN,
+    process.env.CHAT2CODEX_BUN,
     ...candidates,
     ...pathCandidates,
     typeof Bun !== "undefined" ? Bun.which("bun") : undefined,
@@ -307,13 +313,13 @@ export function defaultChromeExecutable(
 
 export function loadConfig(): AppConfig {
   const path = getConfigPath();
-  if (!existsSync(path)) throw new Error(`Configuration is missing: ${path}. Run codex-chatgpt-web setup first.`);
+  if (!existsSync(path)) throw new Error(`Configuration is missing: ${path}. Run chat2codex setup first.`);
   return parseConfig(JSON.parse(stripUtf8Bom(readFileSync(path, "utf8"))), path);
 }
 
 export function loadConfigForSetup(): AppConfig {
   const path = getConfigPath();
-  if (!existsSync(path)) throw new Error(`Configuration is missing: ${path}. Run codex-chatgpt-web setup first.`);
+  if (!existsSync(path)) throw new Error(`Configuration is missing: ${path}. Run chat2codex setup first.`);
   const raw = JSON.parse(stripUtf8Bom(readFileSync(path, "utf8"))) as Record<string, unknown>;
   if (raw.version === 1 && raw.mode === "pro-only") {
     raw.version = 2;
@@ -418,6 +424,11 @@ function parseConfig(value: unknown, path: string): AppConfig {
   const solAvailable = parsed.solAvailable !== false;
   const proAvailable = parsed.proAvailable === true;
   const experimentalBiggerContext = parsed.experimentalBiggerContext === true;
+  const integrationMode = parsed.integrationMode ?? "standalone";
+  if (integrationMode !== "standalone" && integrationMode !== "external-manager") {
+    throw new Error(`Invalid integrationMode in ${path}`);
+  }
+  const hybrid = validateHybridRoutingConfig(parsed.hybrid ?? DEFAULT_HYBRID_ROUTING_CONFIG);
   if (proAvailable && !solAvailable) {
     throw new Error(`Invalid ChatGPT account capabilities in ${path}: Pro requires Sol`);
   }
@@ -427,6 +438,8 @@ function parseConfig(value: unknown, path: string): AppConfig {
     solAvailable,
     proAvailable,
     experimentalBiggerContext,
+    integrationMode,
+    hybrid,
   } as AppConfig;
 }
 

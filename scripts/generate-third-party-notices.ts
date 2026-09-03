@@ -83,7 +83,7 @@ const libnotifyLicense = readFileSync(
   "utf8",
 ).trim();
 const output = [
-  "codex-chatgpt-web third-party notices",
+  "chat2codex third-party notices",
   "",
   "This file covers runtime JavaScript packages bundled into the standalone executable.",
   "The executable also embeds Bun 1.4.0; Bun's licensing and relinking notice follows first.",

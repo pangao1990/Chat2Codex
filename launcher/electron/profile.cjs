@@ -23,40 +23,40 @@ function resolveLauncherProfile({
   }
   const development = argv.includes("--dev-profile");
   if (!development) {
-    const coreHome = env.CODEX_CHATGPT_WEB_HOME?.trim()
-      ? resolveUserPath(env.CODEX_CHATGPT_WEB_HOME.trim(), homeDir)
-      : path.join(homeDir, ".codex-chatgpt-web");
-    const userData = env.CODEX_WEB_GPT_LAUNCHER_DATA_DIR?.trim()
-      ? resolveUserPath(env.CODEX_WEB_GPT_LAUNCHER_DATA_DIR.trim(), homeDir)
-      : path.join(appData, "Codex Web GPT");
+    const coreHome = env.CHAT2CODEX_HOME?.trim()
+      ? resolveUserPath(env.CHAT2CODEX_HOME.trim(), homeDir)
+      : path.join(homeDir, ".chat2codex");
+    const userData = env.CHAT2CODEX_LAUNCHER_DATA_DIR?.trim()
+      ? resolveUserPath(env.CHAT2CODEX_LAUNCHER_DATA_DIR.trim(), homeDir)
+      : path.join(coreHome, "launcher");
     return {
       kind: PRODUCTION_PROFILE,
-      displayName: "Codex Web GPT",
+      displayName: "Chat2Codex",
       coreHome,
       codexHome: env.CODEX_HOME?.trim()
         ? resolveUserPath(env.CODEX_HOME.trim(), homeDir)
         : path.join(homeDir, ".codex"),
       userData,
-      browserPartition: "persist:codex-web-gpt-chatgpt",
+      browserPartition: "persist:chat2codex-chatgpt",
     };
   }
 
-  const coreHome = env.CODEX_WEB_GPT_DEV_HOME?.trim()
-    ? resolveUserPath(env.CODEX_WEB_GPT_DEV_HOME.trim(), homeDir)
-    : path.join(homeDir, ".codex-chatgpt-web-dev");
-  const productionHome = env.CODEX_CHATGPT_WEB_HOME?.trim()
-    ? resolveUserPath(env.CODEX_CHATGPT_WEB_HOME.trim(), homeDir)
-    : path.join(homeDir, ".codex-chatgpt-web");
+  const coreHome = env.CHAT2CODEX_DEV_HOME?.trim()
+    ? resolveUserPath(env.CHAT2CODEX_DEV_HOME.trim(), homeDir)
+    : path.join(homeDir, ".chat2codex-dev");
+  const productionHome = env.CHAT2CODEX_HOME?.trim()
+    ? resolveUserPath(env.CHAT2CODEX_HOME.trim(), homeDir)
+    : path.join(homeDir, ".chat2codex");
   if (path.resolve(coreHome) === path.resolve(productionHome)) {
-    throw new Error("DEV profile home must differ from the production codex-chatgpt-web home");
+    throw new Error("DEV profile home must differ from the production Chat2Codex home");
   }
   return {
     kind: DEVELOPMENT_PROFILE,
-    displayName: "Codex Web GPT DEV",
+    displayName: "Chat2Codex DEV",
     coreHome,
     codexHome: path.join(coreHome, "codex-home"),
     userData: path.join(coreHome, "launcher"),
-    browserPartition: "persist:codex-web-gpt-dev-chatgpt",
+    browserPartition: "persist:chat2codex-dev-chatgpt",
   };
 }
 

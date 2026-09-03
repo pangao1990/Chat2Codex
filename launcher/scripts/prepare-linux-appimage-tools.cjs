@@ -48,12 +48,12 @@ function replaceToolsetLibnotify(toolsetRoot, source) {
 
 async function main() {
   if (process.platform !== "linux" || process.arch !== "x64") {
-    throw new Error("Codex Web GPT AppImage tool preparation requires Linux x64");
+    throw new Error("Chat2Codex AppImage tool preparation requires Linux x64");
   }
-  const source = process.env.CODEX_WEB_GPT_LINUX_LIBNOTIFY?.trim();
+  const source = process.env.CHAT2CODEX_LINUX_LIBNOTIFY?.trim();
   if (!source || !path.isAbsolute(source) || !fs.statSync(source, { throwIfNoEntry: false })?.isFile()) {
     throw new Error(
-      "AppImage tool preparation requires CODEX_WEB_GPT_LINUX_LIBNOTIFY from scripts/prepare-linux-libnotify.sh",
+      "AppImage tool preparation requires CHAT2CODEX_LINUX_LIBNOTIFY from scripts/prepare-linux-libnotify.sh",
     );
   }
   requireLibnotifySymbol(source);
@@ -61,7 +61,7 @@ async function main() {
   const tools = await getAppImageTools("0.0.0", Arch.x64);
   const downloadedRoot = path.dirname(path.dirname(tools.runtimeLibraries));
   const outputRoot = path.resolve(
-    process.env.CODEX_WEB_GPT_APPIMAGE_TOOLS_OUTPUT
+    process.env.CHAT2CODEX_APPIMAGE_TOOLS_OUTPUT
       || path.join(__dirname, "..", "build", "appimage-tools"),
   );
   if (downloadedRoot === outputRoot) throw new Error("AppImage toolset output must not replace the shared download cache");

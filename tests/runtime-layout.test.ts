@@ -24,12 +24,12 @@ import { processRunning } from "../src/process";
 
 const roots: string[] = [];
 afterEach(() => {
-  delete process.env.CODEX_CHATGPT_WEB_HOME;
+  delete process.env.CHAT2CODEX_HOME;
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
 test("managed runtime commands reject every ephemeral path component", () => {
-  expect(() => assertDurableRuntimeCommand(["/private/tmp/codex-chatgpt-web"])).toThrow("ephemeral path");
+  expect(() => assertDurableRuntimeCommand(["/private/tmp/chat2codex"])).toThrow("ephemeral path");
   expect(() => assertDurableRuntimeCommand([process.execPath, "/tmp/build/app/cli.js"])).toThrow("ephemeral path");
   expect(() => assertDurableRuntimeCommand([process.execPath])).not.toThrow();
 });
@@ -48,7 +48,7 @@ test("Windows Bun shims resolve to the installed Bun executable before service s
 });
 
 test("installed Bun discovery ignores a temporary self-extract executable", () => {
-  const root = join(tmpdir(), `codex-chatgpt-web-bun-discovery-${process.pid}-${Date.now()}`);
+  const root = join(tmpdir(), `chat2codex-bun-discovery-${process.pid}-${Date.now()}`);
   const ephemeralBun = join(root, "bun-node-test", "bun.exe");
   roots.push(root);
   mkdirSync(join(root, "bun-node-test"), { recursive: true });
@@ -61,12 +61,12 @@ test("installed Bun discovery ignores a temporary self-extract executable", () =
 });
 
 test("Windows uses a stable native named pipe for the outer Codex tool broker", () => {
-  const first = defaultBrokerEndpoint("C:\\Users\\alice\\.codex-chatgpt-web", "win32");
-  const second = defaultBrokerEndpoint("C:\\Users\\alice\\.codex-chatgpt-web", "win32");
+  const first = defaultBrokerEndpoint("C:\\Users\\alice\\.chat2codex", "win32");
+  const second = defaultBrokerEndpoint("C:\\Users\\alice\\.chat2codex", "win32");
   expect(first).toBe(second);
   expect(isWindowsPipeEndpoint(first)).toBe(true);
   expect(resolveBrokerEndpoint(first)).toBe(first);
-  expect(defaultBrokerEndpoint("/home/alice/.codex-chatgpt-web", "linux")).toEndWith(join("runtime", "turn-broker.sock"));
+  expect(defaultBrokerEndpoint("/home/alice/.chat2codex", "linux")).toEndWith(join("runtime", "turn-broker.sock"));
 });
 
 test("permission-denied process probes preserve ownership evidence", () => {
@@ -107,9 +107,9 @@ test("the DEV profile uses a distinct connector identity without overwriting cus
 });
 
 test("setup explicitly migrates v1 pro-only config to v3 managed browser-only", () => {
-  const root = join(tmpdir(), `codex-chatgpt-web-config-migration-${process.pid}-${Date.now()}`);
+  const root = join(tmpdir(), `chat2codex-config-migration-${process.pid}-${Date.now()}`);
   roots.push(root);
-  process.env.CODEX_CHATGPT_WEB_HOME = root;
+  process.env.CHAT2CODEX_HOME = root;
   mkdirSync(root, { recursive: true });
   writeFileSync(join(root, "config.json"), `${JSON.stringify({
     version: 1,
@@ -140,9 +140,9 @@ test("setup explicitly migrates v1 pro-only config to v3 managed browser-only", 
 });
 
 test("legacy temp-path wrapper and vendor are removed only after runtime ownership changes", () => {
-  const root = join(tmpdir(), `codex-chatgpt-web-legacy-runtime-${process.pid}-${Date.now()}`);
+  const root = join(tmpdir(), `chat2codex-legacy-runtime-${process.pid}-${Date.now()}`);
   roots.push(root);
-  process.env.CODEX_CHATGPT_WEB_HOME = root;
+  process.env.CHAT2CODEX_HOME = root;
   const wrapper = join(root, "bin", "serve-with-playwright.sh");
   const vendorFile = join(root, "vendor", "node_modules", "playwright-core", "package.json");
   mkdirSync(join(root, "bin"), { recursive: true });
@@ -163,7 +163,7 @@ test("legacy temp-path wrapper and vendor are removed only after runtime ownersh
 test("launcher browser ownership is explicit in provider configuration", () => {
   const config = defaultConfig("browser-only");
   config.browserHost = "launcher";
-  config.browserHostDescriptorPath = "/Users/example/.codex-chatgpt-web/runtime/launcher-browser.json";
+  config.browserHostDescriptorPath = "/Users/example/.chat2codex/runtime/launcher-browser.json";
   config.stallTimeoutSec = 900;
   expect(providerConfig(config).chatgptWeb).toMatchObject({
     browserHost: "launcher",

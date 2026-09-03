@@ -10,8 +10,7 @@ function run(args: string[], cwd: string): void {
     cwd,
     env: {
       ...process.env,
-      CODEX_WEB_GPT_BUN: bunExecutable,
-      CODEX_CHATGPT_WEB_BUN: bunExecutable,
+      CHAT2CODEX_BUN: bunExecutable,
     },
     stdin: "inherit",
     stdout: "inherit",

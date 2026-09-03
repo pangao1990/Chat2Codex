@@ -1,5 +1,5 @@
 name: Bug report
-description: Report one reproducible Codex Web GPT failure with fresh privacy-safe diagnostics.
+description: Report one reproducible Chat2Codex failure with fresh privacy-safe diagnostics.
 title: "[Bug] "
 labels:
   - bug
@@ -7,13 +7,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        Please read [Troubleshooting](https://github.com/miuuyy/codex-chatgpt-web/blob/main/TROUBLESHOOTING.md), update to the latest release, and reproduce the failure once before filing.
+        Please read [Troubleshooting](https://github.com/pangao1990/Chat2Codex/blob/main/TROUBLESHOOTING.md), update to the latest release, and reproduce the failure once before filing.
         Never upload cookies, browser storage, API keys, Tunnel IDs, raw launcher logs, or unredacted Codex prompts/tool output.
 
   - type: input
     id: launcher-version
     attributes:
-      label: Codex Web GPT version
+      label: Chat2Codex version
       description: Use the version shown by the launcher or release installer, not "latest".
       placeholder: x.y.z
     validations:

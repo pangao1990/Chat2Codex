@@ -14,7 +14,7 @@ import { defaultConfig } from "../src/config";
 
 test("login starts with normal Chrome and captures state in a headed Keychain-aware context", async () => {
   if (process.platform === "win32") return;
-  const root = mkdtempSync(join(tmpdir(), "codex-chatgpt-web-login-"));
+  const root = mkdtempSync(join(tmpdir(), "chat2codex-login-"));
   const executable = join(root, "fake-chrome");
   const argsLog = join(root, "args.log");
   writeFileSync(executable, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$CODEX_LOGIN_ARG_LOG\"\n", { mode: 0o700 });
@@ -43,7 +43,7 @@ test("login starts with normal Chrome and captures state in a headed Keychain-aw
 
 test("passkey login authenticates in normal Chrome before isolated offline pipe capture", async () => {
   if (process.platform !== "darwin") return;
-  const root = mkdtempSync(join(tmpdir(), "codex-chatgpt-web-passkey-login-"));
+  const root = mkdtempSync(join(tmpdir(), "chat2codex-passkey-login-"));
   const executable = join(root, "fake-chrome");
   const argsLog = join(root, "args.log");
   const pidLog = join(root, "pid.log");
@@ -128,7 +128,7 @@ test("passkey storage capture excludes identity-provider and partitioned state",
 });
 
 test("a storage-state file is not trusted without a verification marker", () => {
-  const root = mkdtempSync(join(tmpdir(), "codex-chatgpt-web-login-state-"));
+  const root = mkdtempSync(join(tmpdir(), "chat2codex-login-state-"));
   try {
     const config = defaultConfig("browser-only");
     config.storageStatePath = join(root, "storage-state.json");

@@ -49,7 +49,7 @@ test("failed launcher IPC calls are written to runtime activity", async () => {
 });
 
 test("launcher activity restores valid records from the previous process", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "codex-web-gpt-logging-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "chat2codex-logging-"));
   const filePath = path.join(root, "launcher.jsonl");
   try {
     fs.writeFileSync(filePath, [
@@ -65,7 +65,7 @@ test("launcher activity restores valid records from the previous process", () =>
 });
 
 test("exported launcher logs remove local usernames, private ChatGPT titles, and URL paths", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "codex-web-gpt-export-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "chat2codex-export-"));
   const filePath = path.join(root, "launcher.jsonl");
   const destinationPath = path.join(root, "shared", "diagnostics.jsonl");
   try {
@@ -109,7 +109,7 @@ test("exported launcher logs remove local usernames, private ChatGPT titles, and
 });
 
 test("a closed Windows diagnostic pipe is recorded without becoming an uncaught process error", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "codex-web-gpt-process-pipe-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "chat2codex-process-pipe-"));
   const filePath = path.join(root, "process-stream-errors.log");
   const stream = new PassThrough();
   try {

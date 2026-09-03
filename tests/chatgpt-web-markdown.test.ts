@@ -12,12 +12,12 @@ test("turns observed inline file path formats into Markdown links", () => {
       target: "output/path-format-probe/beta-report.json",
     },
     {
-      path: "/Users/johnmacartew/codex-chatgpt-web/src/path-format-probe/gamma-helper.ts",
-      target: "/Users/johnmacartew/codex-chatgpt-web/src/path-format-probe/gamma-helper.ts",
+      path: "/Users/johnmacartew/chat2codex/src/path-format-probe/gamma-helper.ts",
+      target: "/Users/johnmacartew/chat2codex/src/path-format-probe/gamma-helper.ts",
     },
     {
-      path: "/Users/johnmacartew/codex-chatgpt-web/output/path-format-probe/epsilon-report.pdf",
-      target: "/Users/johnmacartew/codex-chatgpt-web/output/path-format-probe/epsilon-report.pdf",
+      path: "/Users/johnmacartew/chat2codex/output/path-format-probe/epsilon-report.pdf",
+      target: "/Users/johnmacartew/chat2codex/output/path-format-probe/epsilon-report.pdf",
     },
     {
       path: String.raw`C:\Users\Dev\Documents\Codex\path-format-probe\zeta-result.pdf`,

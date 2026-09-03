@@ -247,7 +247,7 @@ export async function forwardNativeCodexRequest(
     upstream.body
       ? withUncleanCloseTolerance(upstream.body, isEventStream, bytes => {
         console.warn(
-          `[codex-chatgpt-web] native_upstream_unclean_close endpoint=${endpoint} bytes=${bytes}`
+          `[chat2codex] native_upstream_unclean_close endpoint=${endpoint} bytes=${bytes}`
           + " (turn had already completed; closing the client stream normally)",
         );
       })

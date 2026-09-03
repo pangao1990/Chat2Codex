@@ -4,7 +4,7 @@
 Codex app / CLI
       │ Responses API on loopback
       ▼
-launcher-owned codex-chatgpt-web daemon
+launcher-owned Chat2Codex daemon
   ├─ official /models passthrough + fixed ChatGPT Web models
   ├─ native Responses passthrough or ChatGPT Responses/SSE bridge
   ├─ ChatGPT browser worker (up to five task-bound Electron tabs)
@@ -67,7 +67,7 @@ launcher from starting a Responses daemon for its config. DEV setup stores brows
 and tunnel credentials but performs no Codex integration, system service installation, or port
 probe. The DEV launcher supervisor owns only the isolated MCP tunnel. Browser diagnostics, broker
 state, thread authority, checkpoints, and named chat state live
-under `~/.codex-chatgpt-web-dev` by default.
+under `~/.chat2codex-dev` by default.
 
 The ChatGPT connector name is also the public MCP ABI identity. The direct turn-token contract uses
 `Codex Native2`; the retired `Codex Native` identity is never selected or refreshed in place. Setup

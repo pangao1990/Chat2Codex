@@ -64,7 +64,7 @@ async function proxyCheck(config: AppConfig): Promise<DoctorCheck> {
     const response = await fetch(`http://${config.host}:${config.port}/healthz`, { signal: controller.signal });
     if (!response.ok) return { id: "proxy", status: "error", message: `Responses proxy returned HTTP ${response.status}` };
     const body = await response.json() as Record<string, unknown>;
-    if (body.service !== "codex-chatgpt-web" || body.status !== "ok") {
+    if (body.service !== "chat2codex" || body.status !== "ok") {
       return { id: "proxy", status: "error", message: "The configured port belongs to another service" };
     }
     if (body.mode !== config.mode) {
@@ -128,7 +128,7 @@ export async function runDoctor(): Promise<DoctorReport> {
       checks.push({ id: "chrome", status: "ok", message: `Chrome executable found: ${config.chromeExecutablePath}` });
     }
     if (!browserLoginStateExists(config)) {
-      checks.push({ id: "login", status: "error", message: "ChatGPT login state is missing or unverified; run `codex-chatgpt-web login`" });
+      checks.push({ id: "login", status: "error", message: "ChatGPT login state is missing or unverified; run `chat2codex login`" });
     } else if (!secureFile(config.storageStatePath)) {
       checks.push({ id: "login", status: "error", message: `ChatGPT login state is readable by other users: ${config.storageStatePath}` });
     } else if (!secureFile(loginVerificationMarkerPath(config.storageStatePath))) {

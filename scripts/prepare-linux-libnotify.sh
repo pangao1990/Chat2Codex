@@ -11,8 +11,8 @@ ARCHIVE="libnotify-$VERSION.tar.xz"
 SOURCE_URL="https://download.gnome.org/sources/libnotify/0.8/$ARCHIVE"
 EXPECTED_SHA256="4be15202ec4184fce1ac15997ece5530d2be32fe9573875aeb10e3b573858748"
 REPOSITORY_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-OUTPUT="${CODEX_WEB_GPT_LINUX_LIBNOTIFY_OUTPUT:-$REPOSITORY_ROOT/launcher/build/linux-libs/libnotify.so.4}"
-TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/codex-web-gpt-libnotify.XXXXXX")"
+OUTPUT="${CHAT2CODEX_LINUX_LIBNOTIFY_OUTPUT:-$REPOSITORY_ROOT/launcher/build/linux-libs/libnotify.so.4}"
+TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/chat2codex-libnotify.XXXXXX")"
 trap 'rm -rf "$TEMP_DIR"' EXIT HUP INT TERM
 
 for command in curl meson ninja pkg-config sha256sum tar nm; do
@@ -50,6 +50,6 @@ fi
 mkdir -p "$(dirname -- "$OUTPUT")"
 install -m 0755 "$LIBRARY" "$OUTPUT"
 if [ -n "${GITHUB_ENV:-}" ]; then
-  printf 'CODEX_WEB_GPT_LINUX_LIBNOTIFY=%s\n' "$OUTPUT" >> "$GITHUB_ENV"
+  printf 'CHAT2CODEX_LINUX_LIBNOTIFY=%s\n' "$OUTPUT" >> "$GITHUB_ENV"
 fi
 printf '%s\n' "$OUTPUT"

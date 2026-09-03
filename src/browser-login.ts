@@ -218,7 +218,7 @@ export async function captureSystemBrowserLogin(
   const profileDir = mkdtempSync(join(profileParent, "login-profile-"));
   try { chmodSync(profileDir, 0o700); } catch {}
   process.stdout.write(
-    "Sign in with your passkey in the dedicated Chrome window. When Temporary Chat is ready, return to Codex Web GPT and choose Continue.\n",
+    "Sign in with your passkey in the dedicated Chrome window. When Temporary Chat is ready, return to Chat2Codex and choose Continue.\n",
   );
 
   let capture: SystemBrowserLoginCapture | undefined;

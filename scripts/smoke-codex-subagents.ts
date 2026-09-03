@@ -30,7 +30,7 @@ catalogConfig.proAvailable = true;
 catalogConfig.subagentProtocol = protocol === "v1" ? "compatibility-v1" : "native";
 const catalog = augmentNativeModelCatalog(sourceCatalog, catalogConfig);
 
-const root = join(tmpdir(), `codex-chatgpt-web-subagents-${process.pid}-${Date.now()}`);
+const root = join(tmpdir(), `chat2codex-subagents-${process.pid}-${Date.now()}`);
 const codexHome = join(root, "codex");
 mkdirSync(codexHome, { recursive: true });
 writeFileSync(join(root, "models.json"), `${JSON.stringify(catalog)}\n`);

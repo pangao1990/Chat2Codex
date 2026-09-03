@@ -11,7 +11,7 @@ const {
 } = require("../electron/state.cjs");
 
 test("launcher state persists onboarding, language, and autostart atomically", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "codex-web-gpt-launcher-state-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "chat2codex-launcher-state-"));
   const file = path.join(root, "state.json");
   try {
     const store = createStateStore(file);
@@ -74,7 +74,7 @@ test("sidebar state accepts only bounded native shell dimensions", () => {
 });
 
 test("Japanese is preserved as a supported persisted launcher language", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "codex-web-gpt-ja-state-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "chat2codex-ja-state-"));
   const file = path.join(root, "state.json");
   try {
     fs.writeFileSync(file, JSON.stringify({ version: 1, language: "ja" }));
@@ -85,7 +85,7 @@ test("Japanese is preserved as a supported persisted launcher language", () => {
 });
 
 test("persisted sidebar corruption is repaired without changing the rest of launcher state", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "codex-web-gpt-sidebar-state-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "chat2codex-sidebar-state-"));
   const file = path.join(root, "state.json");
   try {
     fs.writeFileSync(file, JSON.stringify({

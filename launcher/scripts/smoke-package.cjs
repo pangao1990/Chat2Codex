@@ -10,7 +10,7 @@ const launcherManifest = JSON.parse(
   fs.readFileSync(path.join(launcherRoot, "package.json"), "utf8"),
 );
 const expectedVersion = launcherManifest.version;
-const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "codex-web-gpt-package-smoke-"));
+const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "chat2codex-package-smoke-"));
 const markerPath = path.join(scratch, "ready.json");
 const coreHome = path.join(scratch, "core-home");
 let macAppBundle;
@@ -64,10 +64,10 @@ function smokeEnvironment() {
   return {
     ...process.env,
     TMPDIR: scratch,
-    CODEX_WEB_GPT_LAUNCHER_DATA_DIR: path.join(scratch, "launcher-data"),
-    CODEX_CHATGPT_WEB_HOME: coreHome,
+    CHAT2CODEX_LAUNCHER_DATA_DIR: path.join(scratch, "launcher-data"),
+    CHAT2CODEX_HOME: coreHome,
     CODEX_HOME: path.join(scratch, "codex-home"),
-    CODEX_WEB_GPT_SMOKE_FILE: markerPath,
+    CHAT2CODEX_SMOKE_FILE: markerPath,
   };
 }
 
@@ -82,8 +82,8 @@ try {
     const stage = path.join(scratch, "stage");
     fs.mkdirSync(stage);
     run("ditto", ["-x", "-k", archive, stage]);
-    macAppBundle = path.join(stage, "Codex Web GPT.app");
-    executable = path.join(macAppBundle, "Contents", "MacOS", "Codex Web GPT");
+    macAppBundle = path.join(stage, "Chat2Codex.app");
+    executable = path.join(macAppBundle, "Contents", "MacOS", "Chat2Codex");
     command = executable;
     args = ["--launcher-smoke-test"];
   } else if (process.platform === "linux") {

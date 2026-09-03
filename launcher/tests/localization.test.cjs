@@ -44,7 +44,7 @@ test("Japanese is a complete launcher language across state, IPC, onboarding, an
 });
 
 test("native launcher dialogs and tray actions follow the persisted Japanese language", () => {
-  assert.match(electronMain, /ja: Object\.freeze\(\{[\s\S]*?openLauncher: "Codex Web GPT を開く"/);
+  assert.match(electronMain, /ja: Object\.freeze\(\{[\s\S]*?openLauncher: "Chat2Codex を開く"/);
   assert.match(electronMain, /exportDiagnostics: "プライバシー保護済みの診断情報をエクスポート"/);
   assert.match(electronMain, /removeMessage: "Codex から ChatGPT Web モデルを削除し、以前のモデルルートを復元しますか？"/);
   assert.match(electronMain, /updateTrayMenu\(state\.language\)/);
@@ -64,6 +64,6 @@ test("localized READMEs preserve every command block and link target from Englis
     assert.deepEqual(commandFences(source), commandFences(englishReadme));
     assert.deepEqual(linkTargets(source), linkTargets(englishReadme));
   }
-  assert.match(japaneseReadme, /Codex タスク ──Responses \+ SSE──▶/);
-  assert.match(japaneseReadme, /ネイティブ UI、コンテキスト、画像、トレース、ツールライフサイクル/);
+  assert.match(japaneseReadme, /Use ChatGPT as the brain, Codex as the hands/);
+  assert.match(japaneseReadme, /\.chat2codex-dev/);
 });

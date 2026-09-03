@@ -1,20 +1,20 @@
 {
-  "name": "codex-chatgpt-web",
-  "version": "4.0.8",
+  "name": "chat2codex",
+  "version": "0.1.0-alpha.0",
   "private": true,
-  "description": "A focused local Responses bridge that runs Codex tasks through a user-authenticated ChatGPT web session.",
+  "description": "Use ChatGPT as the brain and Codex as the hands, with quality-locked native fallback.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/miuuyy/codex-chatgpt-web.git"
+    "url": "git+https://github.com/pangao1990/Chat2Codex.git"
   },
-  "homepage": "https://github.com/miuuyy/codex-chatgpt-web#readme",
+  "homepage": "https://github.com/pangao1990/Chat2Codex#readme",
   "bugs": {
-    "url": "https://github.com/miuuyy/codex-chatgpt-web/issues"
+    "url": "https://github.com/pangao1990/Chat2Codex/issues"
   },
   "packageManager": "bun@1.4.0",
   "type": "module",
   "bin": {
-    "codex-chatgpt-web": "./src/cli.ts"
+    "chat2codex": "./src/cli.ts"
   },
   "files": [
     "dist",
@@ -73,8 +73,9 @@
   },
   "overrides": {
     "@hono/node-server": "2.0.12",
-    "fast-uri": "3.1.5",
+    "fast-uri": "3.1.6",
     "hono": "4.12.34",
+    "qs": "6.16.0",
     "zod-to-json-schema": "3.25.1"
   },
   "keywords": [

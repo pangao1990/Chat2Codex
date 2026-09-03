@@ -37,6 +37,8 @@ import { namespacedToolName, type AdapterEvent, type CodexParsedRequest } from "
 import type { CodexProviderConfig } from "./types";
 import type { ProviderAdapter } from "./adapters/base";
 import { VERSION } from "./version";
+import { CircuitBreaker } from "./hybrid/circuit-breaker";
+import { allowsAutomaticFallback, classifyFailure } from "./hybrid/failure-classifier";
 
 type HttpTrackedEndpoint = "models" | "responses" | "compact" | "search" | "unspecified";
 
@@ -84,7 +86,7 @@ function streamFailureEvidence(
 }
 
 const reportHttpStreamFailure: HttpStreamFailureReporter = evidence => {
-  console.warn(`[codex-chatgpt-web] http_stream_failed ${JSON.stringify(evidence)}`);
+  console.warn(`[chat2codex] http_stream_failed ${JSON.stringify(evidence)}`);
 };
 
 function emitHttpStreamFailure(
@@ -520,6 +522,90 @@ export async function responseRequest(
   return Response.json(json);
 }
 
+/**
+ * Runtime routing is deliberately turn-boundary only. A streamed ChatGPT response is never spliced
+ * with Native Codex output. Retry/continuation requests observe the open circuit and start wholly
+ * on Native Codex, preserving the provider boundary and the canonical Codex history.
+ */
+export function createHybridResponseHandler(
+  config: AppConfig,
+  adapterFactory: ChatGptWebAdapterFactory = createChatGptWebAdapter,
+  dependencies: { fetchNative?: NativeFetch } = {},
+): (request: Request) => Promise<Response> {
+  const circuit = new CircuitBreaker(config.hybrid.circuitBreaker);
+  return async (request: Request): Promise<Response> => {
+    let raw: unknown;
+    try {
+      raw = await readJsonRequestBody(request.clone());
+    } catch {
+      return responseRequest(request, config, adapterFactory);
+    }
+    const requestedModel = raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as { model?: unknown }).model
+      : undefined;
+    if (typeof requestedModel !== "string" || !isChatGptWebModelSlug(requestedModel)) {
+      return responseRequest(request, config, adapterFactory);
+    }
+
+    const codexOnly = config.hybrid.mode === "codex-only";
+    const acquired = codexOnly ? { allowed: false as const } : circuit.acquire(requestedModel);
+    if (!acquired.allowed) {
+      if (!codexOnly && !config.hybrid.fallback.enabled) {
+        return formatErrorResponse(503, "provider_unavailable", "ChatGPT circuit is open and Native Codex fallback is disabled");
+      }
+      const fallbackBody = {
+        ...(raw as Record<string, unknown>),
+        model: config.hybrid.fallback.model,
+      };
+      const headers = new Headers(request.headers);
+      headers.delete("content-encoding");
+      headers.delete("content-length");
+      headers.set("content-type", "application/json");
+      const fallbackRequest = new Request(request.url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(fallbackBody),
+        signal: request.signal,
+      });
+      try {
+        const response = await forwardNativeCodexRequest(
+          fallbackRequest,
+          "responses",
+          dependencies.fetchNative,
+          fallbackBody,
+        );
+        const responseHeaders = new Headers(response.headers);
+        responseHeaders.set("x-chat2codex-route", codexOnly
+          ? "codex-native;codex-only"
+          : "codex-native;circuit-open");
+        return new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: responseHeaders,
+        });
+      } catch (error) {
+        return formatErrorResponse(502, "upstream_error", error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    return responseRequest(request, config, adapterFactory, {
+      onAdapterEvent(event) {
+        if (event.type === "done") {
+          circuit.recordSuccess(requestedModel);
+          return;
+        }
+        if (event.type !== "error") return;
+        const reason = classifyFailure({
+          status: event.status,
+          code: event.code,
+          message: event.message,
+        });
+        if (allowsAutomaticFallback(reason)) circuit.recordFailure(requestedModel, reason);
+      },
+    });
+  };
+}
+
 export async function compactRequest(
   req: Request,
   config: AppConfig,
@@ -649,6 +735,7 @@ export function startServer(
   let successfulModelCatalogRequests = 0;
   let lastSuccessfulModelCatalogRequestAt: string | null = null;
   const httpTurns = new HttpTurnCounter();
+  const hybridResponse = createHybridResponseHandler(config);
   const activity = () => ({
     active_http_turns: httpTurns.count(),
     active_browser_turns: chatGptTurnSessions.activeCount() + (turnBroker?.externalOwnerActiveCount() ?? 0),
@@ -668,7 +755,7 @@ export function startServer(
       if (req.method === "GET" && url.pathname === "/healthz") {
         return Response.json({
           status: "ok",
-          service: "codex-chatgpt-web",
+          service: "chat2codex",
           version: VERSION,
           mode: config.mode,
           pid: process.pid,
@@ -742,7 +829,7 @@ export function startServer(
           return formatErrorResponse(
             503,
             "server_error",
-            "codex-chatgpt-web is draining for a requested service operation",
+            "chat2codex is draining for a requested service operation",
           );
         }
         return httpTurns.track(async signal => {
@@ -779,16 +866,16 @@ export function startServer(
         });
       }
       if (req.method === "POST" && url.pathname === "/v1/responses") {
-        if (draining) return formatErrorResponse(503, "server_error", "codex-chatgpt-web is draining for a requested service operation");
+        if (draining) return formatErrorResponse(503, "server_error", "chat2codex is draining for a requested service operation");
         return httpTurns.track(
-          signal => responseRequest(new Request(req, { signal }), config),
+          signal => hybridResponse(new Request(req, { signal })),
           req.signal,
           process.platform,
           "responses",
         );
       }
       if (req.method === "POST" && url.pathname === "/v1/responses/compact") {
-        if (draining) return formatErrorResponse(503, "server_error", "codex-chatgpt-web is draining for a requested service operation");
+        if (draining) return formatErrorResponse(503, "server_error", "chat2codex is draining for a requested service operation");
         return httpTurns.track(
           signal => compactRequest(new Request(req, { signal }), config),
           req.signal,
@@ -797,7 +884,7 @@ export function startServer(
         );
       }
       if (req.method === "POST" && url.pathname === "/v1/alpha/search") {
-        if (draining) return formatErrorResponse(503, "server_error", "codex-chatgpt-web is draining for a requested service operation");
+        if (draining) return formatErrorResponse(503, "server_error", "chat2codex is draining for a requested service operation");
         return httpTurns.track(
           signal => nativeSearchRequest(new Request(req, { signal }), dependencies.fetchUpstream),
           req.signal,
@@ -824,13 +911,13 @@ export function startServer(
       if (failures.length > 0) {
         process.exitCode = 1;
         for (const failure of failures) {
-          console.error(`[codex-chatgpt-web] shutdown cleanup failed: ${failure instanceof Error ? failure.message : String(failure)}`);
+          console.error(`[chat2codex] shutdown cleanup failed: ${failure instanceof Error ? failure.message : String(failure)}`);
         }
       }
       await server.stop(true);
     })().catch(error => {
       process.exitCode = 1;
-      console.error(`[codex-chatgpt-web] server shutdown failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(`[chat2codex] server shutdown failed: ${error instanceof Error ? error.message : String(error)}`);
     });
   }
   process.once("SIGINT", shutdown);

@@ -1,9 +1,9 @@
 {
-  "name": "codex-web-gpt-launcher",
-  "version": "4.0.8",
+  "name": "chat2codex-launcher",
+  "version": "0.1.0-alpha.0",
   "private": true,
-  "description": "Desktop control center for Codex ChatGPT Web",
-  "author": "miuuyy",
+  "description": "Desktop control center for Chat2Codex",
+  "author": "Chat2Codex contributors",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -36,10 +36,14 @@
     "typescript": "^5.9.3",
     "vite": "^6.0.0"
   },
+  "overrides": {
+    "@xmldom/xmldom": "0.8.15",
+    "fast-uri": "3.1.6"
+  },
   "build": {
-    "appId": "dev.codexwebgpt.launcher",
-    "productName": "Codex Web GPT",
-    "artifactName": "codex-web-gpt-${version}-${os}-${arch}.${ext}",
+    "appId": "dev.chat2codex.app",
+    "productName": "Chat2Codex",
+    "artifactName": "chat2codex-${version}-${os}-${arch}.${ext}",
     "asar": true,
     "asarUnpack": [
       "assets/linux-appimage-runner.sh"
@@ -80,7 +84,7 @@
       "target": ["AppImage"]
     },
     "nsis": {
-      "guid": "d1a6026a-6210-588e-9a2b-da3936f94e02",
+      "guid": "3f0797f7-49e5-5d71-bca7-47c40cb899f1",
       "oneClick": false,
       "perMachine": false,
       "allowElevation": false,

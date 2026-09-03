@@ -944,7 +944,7 @@ export class RemoteTurnBroker implements TurnBrokerOwner {
       status = await callTurnBroker(this.socketPath, { method: "owner_status" });
     } catch (error) {
       throw new Error(
-        "The running launcher runtime does not expose the DEV turn-owner protocol; update and restart Codex Web GPT once before using the working-tree DEV chat"
+        "The running launcher runtime does not expose the DEV turn-owner protocol; update and restart Chat2Codex once before using the working-tree DEV chat"
         + ` (${error instanceof Error ? error.message : String(error)})`,
       );
     }

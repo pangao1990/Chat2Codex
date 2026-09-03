@@ -726,7 +726,7 @@ const chatGptExpiredSessionAlert = (page: Page): Locator => page
 export async function throwIfChatGptSessionFailureAlert(page: Page): Promise<void> {
   if (await chatGptExpiredSessionAlert(page).isVisible().catch(() => false)) {
     throw new ChatGptWebAdapterError(
-      "The ChatGPT session has expired. Sign in again in Codex Web GPT.",
+      "The ChatGPT session has expired. Sign in again in Chat2Codex.",
       { status: 401, errorType: "authentication_error", code: "chatgpt_session_expired", retryable: false },
     );
   }
@@ -1624,7 +1624,7 @@ export function browserDiagnosticCheckpoint(value: string): string {
 
 export function browserDiagnosticIncludesScreenshot(
   checkpoint: string,
-  captureAll = process.env.CODEX_CHATGPT_WEB_BROWSER_DIAGNOSTICS === "1",
+  captureAll = process.env.CHAT2CODEX_BROWSER_DIAGNOSTICS === "1",
 ): boolean {
   return captureAll || checkpoint === "response-stalled-30s" || checkpoint === "turn-failed";
 }
@@ -1718,8 +1718,8 @@ class ChatGptBrowserDiagnostics {
             url: location.href,
             title: document.title,
             viewport: { width: innerWidth, height: innerHeight },
-            surfaceId: (globalThis as typeof globalThis & { __CODEX_WEB_GPT_SURFACE_ID__?: unknown })
-              .__CODEX_WEB_GPT_SURFACE_ID__ ?? null,
+            surfaceId: (globalThis as typeof globalThis & { __CHAT2CODEX_SURFACE_ID__?: unknown })
+              .__CHAT2CODEX_SURFACE_ID__ ?? null,
             // textContent avoids the synchronous layout forced by innerText on huge prompts.
             bodyTextChars: document.body?.textContent?.length ?? 0,
             composer: {
@@ -1991,7 +1991,7 @@ export class ChatGptBrowserWorker {
         `ChatGPT Web supports at most ${MAX_CHATGPT_BROWSER_TABS} simultaneous browser turns; close or finish a browser tab before starting another`,
       ));
     }
-    const useHelper = this.config.browserHost === "launcher" && process.env.CODEX_CHATGPT_WEB_BROWSER_HELPER_PROCESS !== "1";
+    const useHelper = this.config.browserHost === "launcher" && process.env.CHAT2CODEX_BROWSER_HELPER_PROCESS !== "1";
     if (useHelper) {
       this.launcherHelper ??= new LauncherBrowserHelperClient(this.config);
     }
@@ -2520,9 +2520,9 @@ export class ChatGptBrowserWorker {
     const observed = await withChatGptBrowserObservationTimeout(withBrowserTurnAbort(page.evaluate(options => {
       type ObserverState = { id: string; revision: number; observer: MutationObserver };
       const scope = globalThis as typeof globalThis & {
-        __CODEX_WEB_GPT_TURN_OBSERVER__?: ObserverState;
+        __CHAT2CODEX_TURN_OBSERVER__?: ObserverState;
       };
-      const observerState = scope.__CODEX_WEB_GPT_TURN_OBSERVER__ ??= (() => {
+      const observerState = scope.__CHAT2CODEX_TURN_OBSERVER__ ??= (() => {
         const state: ObserverState = {
           id: `${performance.timeOrigin}:${Math.random().toString(36).slice(2)}`,
           revision: 0,
@@ -3464,9 +3464,9 @@ export class ChatGptBrowserWorker {
       type ObserverState = { id: number; revision: number; observer: MutationObserver };
       type ObserverRegistry = { documentId: string; nextId: number; states: WeakMap<Element, ObserverState> };
       const scope = globalThis as typeof globalThis & {
-        __CODEX_WEB_GPT_RESPONSE_OBSERVERS__?: ObserverRegistry;
+        __CHAT2CODEX_RESPONSE_OBSERVERS__?: ObserverRegistry;
       };
-      const registry = scope.__CODEX_WEB_GPT_RESPONSE_OBSERVERS__ ??= {
+      const registry = scope.__CHAT2CODEX_RESPONSE_OBSERVERS__ ??= {
         documentId: `${performance.timeOrigin}:${Math.random().toString(36).slice(2)}`,
         nextId: 0,
         states: new WeakMap<Element, ObserverState>(),

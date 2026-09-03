@@ -313,7 +313,7 @@ export class LauncherBrowserHelperClient {
         env: {
           ...process.env,
           ELECTRON_RUN_AS_NODE: "1",
-          CODEX_CHATGPT_WEB_BROWSER_HELPER_PROCESS: "1",
+          CHAT2CODEX_BROWSER_HELPER_PROCESS: "1",
         },
         stdio: ["pipe", "pipe", "pipe"],
         windowsHide: true,

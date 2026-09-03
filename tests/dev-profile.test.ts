@@ -15,8 +15,8 @@ test("DEV profile paths isolate browser, Codex, config, chat, and runtime state"
   const paths = resolveDevProfilePaths({
     homeDirectory,
     environment: {
-      CODEX_CHATGPT_WEB_HOME: join(homeDirectory, "production"),
-      CODEX_WEB_GPT_DEV_HOME: join(homeDirectory, "development"),
+      CHAT2CODEX_HOME: join(homeDirectory, "production"),
+      CHAT2CODEX_DEV_HOME: join(homeDirectory, "development"),
     },
   });
   expect(paths).toEqual({
@@ -32,11 +32,11 @@ test("DEV profile paths isolate browser, Codex, config, chat, and runtime state"
 });
 
 test("Bigger Context is disabled by default and read from the isolated DEV runtime config", () => {
-  const root = mkdtempSync(join(tmpdir(), "codex-web-gpt-dev-features-"));
+  const root = mkdtempSync(join(tmpdir(), "chat2codex-dev-features-"));
   try {
     const paths = resolveDevProfilePaths({
       homeDirectory: root,
-      environment: { CODEX_WEB_GPT_DEV_HOME: join(root, "dev") },
+      environment: { CHAT2CODEX_DEV_HOME: join(root, "dev") },
     });
     expect(readDevChatExperimentalFeatures(paths)).toEqual({ biggerContext: false });
     mkdirSync(paths.home, { recursive: true });
@@ -60,8 +60,8 @@ test("DEV profile path refuses production home reuse", () => {
   expect(() => resolveDevProfilePaths({
     homeDirectory: "/Users/tester",
     environment: {
-      CODEX_CHATGPT_WEB_HOME: shared,
-      CODEX_WEB_GPT_DEV_HOME: shared,
+      CHAT2CODEX_HOME: shared,
+      CHAT2CODEX_DEV_HOME: shared,
     },
   })).toThrow("must differ from the production");
 });
@@ -72,32 +72,32 @@ test("installed launcher discovery has explicit platform candidates", () => {
     homeDirectory: "/Users/tester",
     environment: {},
   })).toEqual([
-    "/Applications/Codex Web GPT.app/Contents/MacOS/Codex Web GPT",
-    "/Users/tester/Applications/Codex Web GPT.app/Contents/MacOS/Codex Web GPT",
+    "/Applications/Chat2Codex.app/Contents/MacOS/Chat2Codex",
+    "/Users/tester/Applications/Chat2Codex.app/Contents/MacOS/Chat2Codex",
   ]);
   expect(installedLauncherCandidates({
     platform: "linux",
     homeDirectory: "/home/tester",
     environment: { PATH: "/usr/local/bin:/usr/bin" },
   })).toEqual([
-    "/home/tester/.local/bin/codex-web-gpt",
-    "/usr/local/bin/codex-web-gpt",
-    "/usr/bin/codex-web-gpt",
+    "/home/tester/.local/bin/chat2codex",
+    "/usr/local/bin/chat2codex",
+    "/usr/bin/chat2codex",
   ]);
   expect(installedLauncherCandidates({
     platform: "win32",
     homeDirectory: "C:\\Users\\tester",
     environment: { LOCALAPPDATA: "C:\\Users\\tester\\AppData\\Local" },
   })).toEqual([
-    "C:\\Users\\tester\\AppData\\Local\\Programs\\Codex Web GPT\\Codex Web GPT.exe",
+    "C:\\Users\\tester\\AppData\\Local\\Programs\\Chat2Codex\\Chat2Codex.exe",
   ]);
   expect(installedLauncherCandidates({
     platform: "win32",
     homeDirectory: "C:\\Users\\tester",
     environment: { LOCALAPPDATA: "C:\\Users\\tester\\AppData\\Local" },
-    windowsInstallLocation: "D:\\Apps\\Codex Web GPT",
+    windowsInstallLocation: "D:\\Apps\\Chat2Codex",
   })).toEqual([
-    "D:\\Apps\\Codex Web GPT\\Codex Web GPT.exe",
+    "D:\\Apps\\Chat2Codex\\Chat2Codex.exe",
   ]);
 });
 
@@ -105,17 +105,17 @@ test("DEV launcher child cannot inherit production home or browser-profile overr
   const paths = resolveDevProfilePaths({
     homeDirectory: "/Users/tester",
     environment: {
-      CODEX_CHATGPT_WEB_HOME: "/Users/tester/production",
-      CODEX_WEB_GPT_DEV_HOME: "/Users/tester/development",
+      CHAT2CODEX_HOME: "/Users/tester/production",
+      CHAT2CODEX_DEV_HOME: "/Users/tester/development",
     },
   });
   expect(devLauncherEnvironment(paths, {
     KEEP_ME: "yes",
-    CODEX_CHATGPT_WEB_HOME: paths.home,
+    CHAT2CODEX_HOME: paths.home,
     CODEX_HOME: "/Users/tester/production-codex",
-    CODEX_WEB_GPT_LAUNCHER_DATA_DIR: "/Users/tester/production-launcher",
+    CHAT2CODEX_LAUNCHER_DATA_DIR: "/Users/tester/production-launcher",
   })).toEqual({
     KEEP_ME: "yes",
-    CODEX_WEB_GPT_DEV_HOME: paths.home,
+    CHAT2CODEX_DEV_HOME: paths.home,
   });
 });

@@ -22,7 +22,7 @@ if (bundled.status !== 0) {
 const config = defaultConfig("browser-only");
 config.proAvailable = true;
 const catalog = augmentNativeModelCatalog(JSON.parse(bundled.stdout), config);
-const root = join(tmpdir(), `codex-chatgpt-web-cancel-${process.pid}-${Date.now()}`);
+const root = join(tmpdir(), `chat2codex-cancel-${process.pid}-${Date.now()}`);
 const codexHome = join(root, "codex");
 mkdirSync(codexHome, { recursive: true });
 writeFileSync(join(root, "models.json"), `${JSON.stringify(catalog)}\n`);

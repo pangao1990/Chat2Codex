@@ -449,7 +449,7 @@ class RuntimeSupervisor {
       detached: DETACH_OWNED_CHILD,
       env: {
         ...process.env,
-        CODEX_CHATGPT_WEB_BROWSER_HOST_DESCRIPTOR: this.browserDescriptorPath,
+        CHAT2CODEX_BROWSER_HOST_DESCRIPTOR: this.browserDescriptorPath,
       },
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -539,7 +539,7 @@ class RuntimeSupervisor {
 
   async proxyHealth(config, timeoutMs = 2_000, expectedPid, requireAccepting = false) {
     const body = await this.proxyHealthPayload(config, timeoutMs);
-    return body?.service === "codex-chatgpt-web"
+    return body?.service === "chat2codex"
       && body?.status === "ok"
       && body?.mode === config.mode
       && body?.version === config.releaseVersion
@@ -1655,7 +1655,7 @@ class RuntimeSupervisor {
       throw new Error("DEV launcher ownership unexpectedly contains a Responses daemon");
     }
     const health = tunnelOnly ? null : await this.proxyHealthPayload(config);
-    const daemonRunning = health?.service === "codex-chatgpt-web"
+    const daemonRunning = health?.service === "chat2codex"
       && health?.mode === config.mode
       && health?.version === config.releaseVersion;
     if (daemonRunning && health.pid !== state.daemonPid) {

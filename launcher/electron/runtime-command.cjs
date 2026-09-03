@@ -15,9 +15,7 @@ function packagedRuntimePaths(resourcesPath, platform = process.platform) {
 
 function sourceRuntimeInvocation(sourceRoot, args) {
   return {
-    executable: process.env.CODEX_CHATGPT_WEB_BUN?.trim()
-      || process.env.CODEX_WEB_GPT_BUN?.trim()
-      || "bun",
+    executable: process.env.CHAT2CODEX_BUN?.trim() || "bun",
     args: ["run", path.join(sourceRoot, "src", "cli.ts"), ...args],
     cwd: sourceRoot,
   };

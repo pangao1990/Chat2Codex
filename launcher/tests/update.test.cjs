@@ -14,11 +14,13 @@ const {
   validateReleaseAssetUrl,
 } = require("../electron/update.cjs");
 
+const RELEASE_REPOSITORY = "example/chat2codex";
+
 test("Linux auto-update fails closed without the stable installer wrapper", () => {
-  const previousAppImage = process.env.CODEX_WEB_GPT_APPIMAGE;
-  const previousWrapper = process.env.CODEX_WEB_GPT_LAUNCHER_EXECUTABLE;
-  process.env.CODEX_WEB_GPT_APPIMAGE = "/opt/codex/Codex Web GPT.AppImage";
-  delete process.env.CODEX_WEB_GPT_LAUNCHER_EXECUTABLE;
+  const previousAppImage = process.env.CHAT2CODEX_APPIMAGE;
+  const previousWrapper = process.env.CHAT2CODEX_LAUNCHER_EXECUTABLE;
+  process.env.CHAT2CODEX_APPIMAGE = "/opt/codex/Chat2Codex.AppImage";
+  delete process.env.CHAT2CODEX_LAUNCHER_EXECUTABLE;
   try {
     assert.throws(() => buildJob({
       version: "1.2.0",
@@ -30,10 +32,10 @@ test("Linux auto-update fails closed without the stable installer wrapper", () =
       logPath: "/tmp/update.log",
     }), /requires the stable install-launcher\.sh wrapper/);
   } finally {
-    if (previousAppImage === undefined) delete process.env.CODEX_WEB_GPT_APPIMAGE;
-    else process.env.CODEX_WEB_GPT_APPIMAGE = previousAppImage;
-    if (previousWrapper === undefined) delete process.env.CODEX_WEB_GPT_LAUNCHER_EXECUTABLE;
-    else process.env.CODEX_WEB_GPT_LAUNCHER_EXECUTABLE = previousWrapper;
+    if (previousAppImage === undefined) delete process.env.CHAT2CODEX_APPIMAGE;
+    else process.env.CHAT2CODEX_APPIMAGE = previousAppImage;
+    if (previousWrapper === undefined) delete process.env.CHAT2CODEX_LAUNCHER_EXECUTABLE;
+    else process.env.CHAT2CODEX_LAUNCHER_EXECUTABLE = previousWrapper;
   }
 });
 
@@ -42,10 +44,10 @@ test("release comparison and platform assets are strict", () => {
   assert.equal(compareVersions("1.1.4", "1.1.4"), 0);
   assert.equal(compareVersions("1.1.3", "1.1.4"), -1);
   assert.equal(compareVersions("1.2.0", "1.1.99"), 1);
-  assert.equal(releaseAssetName("1.2.0", "darwin", "arm64"), "codex-web-gpt-1.2.0-mac-arm64.zip");
-  assert.equal(releaseAssetName("1.2.0", "darwin", "x64"), "codex-web-gpt-1.2.0-mac-x64.zip");
-  assert.equal(releaseAssetName("1.2.0", "win32", "x64"), "codex-web-gpt-1.2.0-win-x64.exe");
-  assert.equal(releaseAssetName("1.2.0", "linux", "x64"), "codex-web-gpt-1.2.0-linux-x64.AppImage");
+  assert.equal(releaseAssetName("1.2.0", "darwin", "arm64"), "chat2codex-1.2.0-mac-arm64.zip");
+  assert.equal(releaseAssetName("1.2.0", "darwin", "x64"), "chat2codex-1.2.0-mac-x64.zip");
+  assert.equal(releaseAssetName("1.2.0", "win32", "x64"), "chat2codex-1.2.0-win-x64.exe");
+  assert.equal(releaseAssetName("1.2.0", "linux", "x64"), "chat2codex-1.2.0-linux-x64.AppImage");
   assert.equal(releaseAssetName("1.2.0", "linux", "arm64"), null);
 });
 
@@ -55,24 +57,39 @@ test("checksums and release URLs bind the exact expected asset", () => {
   assert.throws(() => expectedChecksum(`${hash}  other.zip\n`, "launcher.zip"), /no entry/);
   assert.equal(
     validateReleaseAssetUrl(
-      "https://github.com/miuuyy/codex-chatgpt-web/releases/download/v1.2.0/launcher.zip",
+      "https://github.com/example/chat2codex/releases/download/v1.2.0/launcher.zip",
       "1.2.0",
       "launcher.zip",
+      RELEASE_REPOSITORY,
     ),
-    "https://github.com/miuuyy/codex-chatgpt-web/releases/download/v1.2.0/launcher.zip",
+    "https://github.com/example/chat2codex/releases/download/v1.2.0/launcher.zip",
   );
   assert.throws(
-    () => validateReleaseAssetUrl("https://example.com/launcher.zip", "1.2.0", "launcher.zip"),
+    () => validateReleaseAssetUrl("https://example.com/launcher.zip", "1.2.0", "launcher.zip", RELEASE_REPOSITORY),
     /unexpected release asset URL/,
   );
 });
 
+test("packaged updates stay disabled until a product release repository is configured", () => {
+  const controller = createUpdateController({
+    currentVersion: "1.1.4",
+    platform: "linux",
+    arch: "x64",
+    packaged: true,
+    executablePath: "/tmp/launcher",
+    runtimeExecutable: "/tmp/bun",
+    logsDirectory: "/tmp/logs",
+    repository: "",
+  });
+  assert.deepEqual(controller.getState(), { status: "disabled" });
+});
+
 test("macOS bundle resolution never guesses outside Contents/MacOS", () => {
   assert.equal(
-    macApplicationPath("/Applications/Codex Web GPT.app/Contents/MacOS/Codex Web GPT"),
-    "/Applications/Codex Web GPT.app",
+    macApplicationPath("/Applications/Chat2Codex.app/Contents/MacOS/Chat2Codex"),
+    "/Applications/Chat2Codex.app",
   );
-  assert.throws(() => macApplicationPath("/tmp/Codex Web GPT"), /Could not resolve/);
+  assert.throws(() => macApplicationPath("/tmp/Chat2Codex"), /Could not resolve/);
 });
 
 test("startup check runs once and exposes only a newer complete release", async () => {
@@ -86,6 +103,7 @@ test("startup check runs once and exposes only a newer complete release", async 
     executablePath: "/tmp/launcher",
     runtimeExecutable: "/tmp/bun",
     logsDirectory: "/tmp/logs",
+    repository: RELEASE_REPOSITORY,
     publish: (state) => published.push(state),
     dependencies: {
       fetchRelease: async () => {
@@ -94,12 +112,12 @@ test("startup check runs once and exposes only a newer complete release", async 
           tag_name: "v1.2.0",
           assets: [
             {
-              name: "codex-web-gpt-1.2.0-linux-x64.AppImage",
-              browser_download_url: "https://github.com/miuuyy/codex-chatgpt-web/releases/download/v1.2.0/codex-web-gpt-1.2.0-linux-x64.AppImage",
+              name: "chat2codex-1.2.0-linux-x64.AppImage",
+              browser_download_url: "https://github.com/example/chat2codex/releases/download/v1.2.0/chat2codex-1.2.0-linux-x64.AppImage",
             },
             {
               name: "checksums.txt",
-              browser_download_url: "https://github.com/miuuyy/codex-chatgpt-web/releases/download/v1.2.0/checksums.txt",
+              browser_download_url: "https://github.com/example/chat2codex/releases/download/v1.2.0/checksums.txt",
             },
           ],
         };
@@ -114,8 +132,8 @@ test("startup check runs once and exposes only a newer complete release", async 
 
 test("verified update is handed to one detached worker", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "launcher-update-test-"));
-  const oldAppImage = path.join(root, "versions", "1.1.4", "Codex Web GPT.AppImage");
-  const wrapper = path.join(root, "bin", "codex-web-gpt");
+  const oldAppImage = path.join(root, "versions", "1.1.4", "Chat2Codex.AppImage");
+  const wrapper = path.join(root, "bin", "chat2codex");
   fs.mkdirSync(path.dirname(oldAppImage), { recursive: true });
   fs.mkdirSync(path.dirname(wrapper), { recursive: true });
   fs.writeFileSync(oldAppImage, "old");
@@ -123,10 +141,10 @@ test("verified update is handed to one detached worker", async () => {
   const assetBody = Buffer.from("new appimage");
   const hash = require("node:crypto").createHash("sha256").update(assetBody).digest("hex");
   let spawned = null;
-  const previousAppImage = process.env.CODEX_WEB_GPT_APPIMAGE;
-  const previousWrapper = process.env.CODEX_WEB_GPT_LAUNCHER_EXECUTABLE;
-  process.env.CODEX_WEB_GPT_APPIMAGE = oldAppImage;
-  process.env.CODEX_WEB_GPT_LAUNCHER_EXECUTABLE = wrapper;
+  const previousAppImage = process.env.CHAT2CODEX_APPIMAGE;
+  const previousWrapper = process.env.CHAT2CODEX_LAUNCHER_EXECUTABLE;
+  process.env.CHAT2CODEX_APPIMAGE = oldAppImage;
+  process.env.CHAT2CODEX_LAUNCHER_EXECUTABLE = wrapper;
   try {
     const controller = createUpdateController({
       currentVersion: "1.1.4",
@@ -136,21 +154,22 @@ test("verified update is handed to one detached worker", async () => {
       executablePath: "/tmp/launcher",
       runtimeExecutable: "/durable/bun",
       logsDirectory: path.join(root, "logs"),
+      repository: RELEASE_REPOSITORY,
       dependencies: {
         fetchRelease: async () => ({
           tag_name: "v1.2.0",
           assets: [
             {
-              name: "codex-web-gpt-1.2.0-linux-x64.AppImage",
-              browser_download_url: "https://github.com/miuuyy/codex-chatgpt-web/releases/download/v1.2.0/codex-web-gpt-1.2.0-linux-x64.AppImage",
+              name: "chat2codex-1.2.0-linux-x64.AppImage",
+              browser_download_url: "https://github.com/example/chat2codex/releases/download/v1.2.0/chat2codex-1.2.0-linux-x64.AppImage",
             },
             {
               name: "checksums.txt",
-              browser_download_url: "https://github.com/miuuyy/codex-chatgpt-web/releases/download/v1.2.0/checksums.txt",
+              browser_download_url: "https://github.com/example/chat2codex/releases/download/v1.2.0/checksums.txt",
             },
           ],
         }),
-        downloadText: async () => `${hash}  codex-web-gpt-1.2.0-linux-x64.AppImage\n`,
+        downloadText: async () => `${hash}  chat2codex-1.2.0-linux-x64.AppImage\n`,
         downloadFile: async (_url, destination) => fs.writeFileSync(destination, assetBody),
         sha256: (filePath) => require("node:crypto").createHash("sha256").update(fs.readFileSync(filePath)).digest("hex"),
         spawnWorker: (runtime, worker, job) => {
@@ -172,10 +191,10 @@ test("verified update is handed to one detached worker", async () => {
     assert.equal(fs.existsSync(launch.tempRoot), false);
     assert.deepEqual(controller.getState(), { status: "available", version: "1.2.0" });
   } finally {
-    if (previousAppImage === undefined) delete process.env.CODEX_WEB_GPT_APPIMAGE;
-    else process.env.CODEX_WEB_GPT_APPIMAGE = previousAppImage;
-    if (previousWrapper === undefined) delete process.env.CODEX_WEB_GPT_LAUNCHER_EXECUTABLE;
-    else process.env.CODEX_WEB_GPT_LAUNCHER_EXECUTABLE = previousWrapper;
+    if (previousAppImage === undefined) delete process.env.CHAT2CODEX_APPIMAGE;
+    else process.env.CHAT2CODEX_APPIMAGE = previousAppImage;
+    if (previousWrapper === undefined) delete process.env.CHAT2CODEX_LAUNCHER_EXECUTABLE;
+    else process.env.CHAT2CODEX_LAUNCHER_EXECUTABLE = previousWrapper;
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
@@ -186,9 +205,9 @@ test("detached worker replaces an installed Linux AppImage and removes the old v
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "launcher-worker-test-"));
   const jobRoot = path.join(root, "job");
   const versionsRoot = path.join(root, "versions");
-  const oldTarget = path.join(versionsRoot, "1.1.4", "Codex Web GPT.AppImage");
-  const newTarget = path.join(versionsRoot, "1.2.0", "Codex Web GPT.AppImage");
-  const wrapper = path.join(root, "bin", "codex-web-gpt");
+  const oldTarget = path.join(versionsRoot, "1.1.4", "Chat2Codex.AppImage");
+  const newTarget = path.join(versionsRoot, "1.2.0", "Chat2Codex.AppImage");
+  const wrapper = path.join(root, "bin", "chat2codex");
   const marker = path.join(root, "launched");
   const source = path.join(jobRoot, "update.AppImage");
   const runnerSource = path.join(jobRoot, "run-appimage");
@@ -220,7 +239,7 @@ test("detached worker replaces an installed Linux AppImage and removes the old v
     assert.equal(result.status, 0, result.stderr);
     assert.equal(fs.existsSync(newTarget), true);
     assert.equal(fs.existsSync(path.dirname(oldTarget)), false);
-    assert.match(fs.readFileSync(wrapper, "utf8"), /versions\/1\.2\.0\/Codex Web GPT\.AppImage/);
+    assert.match(fs.readFileSync(wrapper, "utf8"), /versions\/1\.2\.0\/Chat2Codex\.AppImage/);
     assert.doesNotMatch(fs.readFileSync(wrapper, "utf8"), /APPIMAGE_EXTRACT_AND_RUN/);
     assert.equal(fs.existsSync(path.join(versionsRoot, "run-appimage")), true);
     const deadline = Date.now() + 3_000;

@@ -3,7 +3,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { writePrivateFileAtomic } = require("./atomic-file.cjs");
 
-const LINUX_DESKTOP_NAME = "dev.codexwebgpt.launcher.desktop";
+const LINUX_DESKTOP_NAME = "dev.chat2codex.launcher.desktop";
 
 function linuxDesktopPath() {
   const configHome = process.env.XDG_CONFIG_HOME?.trim() || path.join(os.homedir(), ".config");
@@ -17,9 +17,9 @@ function desktopExecArgument(value) {
 }
 
 function linuxExecutable(app) {
-  const stableLauncher = process.env.CODEX_WEB_GPT_LAUNCHER_EXECUTABLE?.trim();
+  const stableLauncher = process.env.CHAT2CODEX_LAUNCHER_EXECUTABLE?.trim();
   if (stableLauncher && path.isAbsolute(stableLauncher)) return stableLauncher;
-  const appImage = process.env.CODEX_WEB_GPT_APPIMAGE?.trim() || process.env.APPIMAGE?.trim();
+  const appImage = process.env.CHAT2CODEX_APPIMAGE?.trim() || process.env.APPIMAGE?.trim();
   if (appImage && path.isAbsolute(appImage)) return appImage;
   return app.getPath("exe");
 }
@@ -28,8 +28,8 @@ function linuxDesktopEntry(app, executable = linuxExecutable(app)) {
   return `[Desktop Entry]
 Type=Application
 Version=1.0
-Name=Codex Web GPT
-Comment=Start the Codex Web GPT launcher in the background
+Name=Chat2Codex
+Comment=Start the Chat2Codex launcher in the background
 Exec=${desktopExecArgument(executable)} --hidden
 Terminal=false
 X-GNOME-Autostart-enabled=true

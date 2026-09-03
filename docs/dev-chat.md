@@ -135,7 +135,7 @@ still returns an explicit simulation receipt.
 The default isolated home is:
 
 ```text
-~/.codex-chatgpt-web-dev/
+~/.chat2codex-dev/
 ├── config.json
 ├── codex-home/
 ├── launcher/                 # Electron userData, cookies, login, logs, window state
@@ -144,8 +144,8 @@ The default isolated home is:
 └── tunnel/
 ```
 
-Set `CODEX_WEB_GPT_DEV_HOME` to choose another absolute DEV home. Generic `--home`,
-`CODEX_CHATGPT_WEB_HOME`, `CODEX_HOME`, and `CODEX_WEB_GPT_LAUNCHER_DATA_DIR` never collapse the DEV
+Set `CHAT2CODEX_DEV_HOME` to choose another absolute DEV home. Generic `--home`,
+`CHAT2CODEX_HOME`, `CODEX_HOME`, and `CHAT2CODEX_LAUNCHER_DATA_DIR` never collapse the DEV
 launcher into production storage.
 
 ## Isolation contract
