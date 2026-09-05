@@ -19,7 +19,14 @@ function ownedProcessTreeRunning(child) {
   if (!Number.isInteger(child.pid) || child.pid < 1) return child.exitCode === null && child.signalCode === null;
   if (process.platform === "win32") return processRunning(child.pid);
   try { process.kill(-child.pid, 0); return true; }
-  catch (error) { if (error.code === "ESRCH") return false; throw error; }
+  catch (error) {
+    if (error.code === "ESRCH") return false;
+    // macOS can report EPERM while a killed group leader is a zombie awaiting
+    // reaping. Treat that as still present, so the bounded wait can observe both
+    // group disappearance and Node's exit event. Never infer exit from EPERM.
+    if (error.code === "EPERM") return true;
+    throw error;
+  }
 }
 
 async function stopOwnedProcessTree(child) {
