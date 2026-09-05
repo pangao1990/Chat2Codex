@@ -11,6 +11,17 @@ Record the release version, operating-system version, install path (`clean` or `
 plan, Codex version, result of each check, and a redacted Activity log for every failure. Never
 capture cookies, tunnel IDs, API keys, bearer tokens, or prompt contents.
 
+## GitHub Actions packaging and publication
+
+1. Synchronize the root and launcher package versions, then run the version check and relevant verification gates.
+2. Write `docs/releases/v<version>.md` with bullet-point changes, platform download links, and actual validation limitations. The initial Chat2Codex release uses `docs/releases/v1.0.0.md`.
+3. Commit the reviewed source and notes, then push the matching `v<version>` tag to `origin`. Push only the intended tag; this repository may also have local tags inherited from upstream.
+4. The Release workflow validates the tag and notes, builds macOS arm64/x64, Windows x64, and Linux x64, then runs verification and packaged startup checks. Publication waits for every build.
+5. The publish job requires all six desktop packages and four runtime archives, adds licenses/installers and `checksums.txt`, and publishes the tracked notes. Stable tags become the latest release; tags containing a hyphen are marked prerelease.
+6. Check the published attachments and checksum contents, and confirm that `https://github.com/pangao1990/Chat2Codex/releases/latest` opens the expected stable version. Both README download buttons use this permanent latest-release URL.
+
+Automated publication does not turn a manual NOT RUN result into PASS. Record actual account and platform acceptance separately below and in the version's release notes.
+
 ## Windows 11 gate
 
 Run this list on a maintained Windows 11 x64 machine with a real ChatGPT account:

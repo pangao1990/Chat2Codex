@@ -8,7 +8,19 @@ permissions:
   contents: write
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify version and release notes before building
+        run: |
+          expected="v$(jq -r .version package.json)"
+          test "$GITHUB_REF_NAME" = "$expected"
+          test "$(jq -r .version launcher/package.json)" = "${expected#v}"
+          test -s "docs/releases/$GITHUB_REF_NAME.md"
+
   build:
+    needs: preflight
     strategy:
       fail-fast: false
       matrix:
@@ -126,6 +138,27 @@ jobs:
             mv "$file" "$name"
           done < <(find . -mindepth 2 -type f -print0 | sort -z)
           find . -mindepth 1 -type d -empty -delete
+      - name: Verify all platform packages are present
+        run: |
+          version="$(jq -r .version package.json)"
+          expected_assets=(
+            "chat2codex-$version-mac-arm64.dmg"
+            "chat2codex-$version-mac-arm64.zip"
+            "chat2codex-$version-mac-x64.dmg"
+            "chat2codex-$version-mac-x64.zip"
+            "chat2codex-$version-win-x64.exe"
+            "chat2codex-$version-linux-x64.AppImage"
+            chat2codex-darwin-arm64.tar.gz
+            chat2codex-darwin-amd64.tar.gz
+            chat2codex-linux-amd64.tar.gz
+            chat2codex-windows-amd64.zip
+          )
+          for asset in "${expected_assets[@]}"; do
+            if [ ! -s "release-assets/$asset" ]; then
+              echo "Missing or empty release package: $asset" >&2
+              exit 1
+            fi
+          done
       - name: Create checksums
         run: |
           cd release-assets
@@ -167,11 +200,14 @@ jobs:
             gh release edit "$GITHUB_REF_NAME" \
               --repo "$GITHUB_REPOSITORY" \
               --draft=false \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file "docs/releases/$GITHUB_REF_NAME.md" \
               "${release_flags[@]}"
           else
             gh release create "$GITHUB_REF_NAME" "${release_files[@]}" \
               --repo "$GITHUB_REPOSITORY" \
               --title "$GITHUB_REF_NAME" \
               "${release_flags[@]}" \
-              --generate-notes
+              --verify-tag \
+              --notes-file "docs/releases/$GITHUB_REF_NAME.md"
           fi

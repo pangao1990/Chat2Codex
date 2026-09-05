@@ -44,7 +44,7 @@
 
 `./scripts/bun-local.sh run app:package` 已通过，生成 macOS arm64 DMG/ZIP。构建流程校验 ZIP 内应用的 `codesign --verify --deep --strict` 签名完整性与嵌入运行时。
 
-安装包使用 ad-hoc 临时签名，未使用 Developer ID 身份签名或 Apple 公证。GitHub 源码推送与下载安装包发布是独立步骤；本次未创建触发公开发布的版本标签。
+安装包使用 ad-hoc 临时签名，未使用 Developer ID 身份签名或 Apple 公证。公开安装包由 `v1.0.0` 标签触发 GitHub Actions 构建，四个平台全部通过验证后才会发布；下载入口为 [最新 Release](https://github.com/pangao1990/Chat2Codex/releases/latest)。下表为本地构建记录，公开附件的校验值以 Release 中的 `checksums.txt` 为准。
 
 产物位于 `launcher/artifacts/`：
 
@@ -66,7 +66,7 @@
 | 真实会话过期、限流和网络中断 | NOT RUN | 验证硬锁、错误提示、取消与恢复行为 |
 | 各系统原生密钥环、权限和文件对话框 | NOT RUN | 在 macOS、Windows、Linux 桌面进行人工操作验收 |
 | Windows/Linux 安装、升级与恢复 | NOT RUN | 使用对应平台安装包完成发布清单 |
-| Developer ID 签名、Apple 公证与公开发布 | NOT RUN | 使用发布者身份执行正式签名、公证和发布流程 |
+| Developer ID 签名与 Apple 公证 | NOT RUN | 使用发布者身份执行正式签名和公证流程 |
 
 本轮未读取个人 Codex 登录凭据、未代用真实 API Key，也未进行付费推理。模拟执行和本地协议检查无法替代以上项目。稳定版发布应以 [发布验证清单](release-validation.md) 的逐项实际结果为准。
 

@@ -8,7 +8,7 @@
     <a href="README.en.md">English</a>
   </p>
   <p>
-    <a href="https://github.com/pangao1990/Chat2Codex/releases">下载程序包</a> ·
+    <a href="https://github.com/pangao1990/Chat2Codex/releases/latest">下载程序包</a> ·
     <a href="docs/INSTALLATION.md">完整安装教程</a> ·
     <a href="docs/DEVELOPMENT.md">二次开发教程</a> ·
     <a href="TROUBLESHOOTING.md">故障排查</a>
@@ -157,7 +157,7 @@ Chat2Codex 是一个需要与官方 Codex Desktop 或 Codex CLI 配合使用的�
 
 ### 3.2 选择正确的文件
 
-打开 [GitHub Releases](https://github.com/pangao1990/Chat2Codex/releases)，进入最新版本，按电脑选择：
+打开 [GitHub Releases](https://github.com/pangao1990/Chat2Codex/releases/latest)，进入最新版本，按电脑选择：
 
 | 电脑 | 下载文件 | 如何判断 |
 | --- | --- | --- |

@@ -8,7 +8,7 @@
     <a href="README.en.md">English</a>
   </p>
   <p>
-    <a href="https://github.com/pangao1990/Chat2Codex/releases">Download packages</a> ·
+    <a href="https://github.com/pangao1990/Chat2Codex/releases/latest">Download packages</a> ·
     <a href="docs/INSTALLATION.en.md">Installation guide</a> ·
     <a href="docs/DEVELOPMENT.en.md">Development guide</a> ·
     <a href="TROUBLESHOOTING.md">Troubleshooting</a>
@@ -160,7 +160,7 @@ You need:
 
 ### 3.2 Choose the correct file
 
-Open [GitHub Releases](https://github.com/pangao1990/Chat2Codex/releases), choose the latest release,
+Open [GitHub Releases](https://github.com/pangao1990/Chat2Codex/releases/latest), choose the latest release,
 and download the file for your computer:
 
 | Computer | Download | How to identify it |
