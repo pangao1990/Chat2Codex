@@ -24,9 +24,12 @@ function ownedProcessTreeRunning(child) {
 
 async function stopOwnedProcessTree(child) {
   terminateOwnedProcessTree(child);
+  // Windows taskkill may finish before Node dispatches the child's exit event.
+  // Wait for both OS termination and the local process handle to settle.
+  const pending = () => ownedProcessTreeRunning(child) || (child && child.exitCode === null && child.signalCode === null);
   const waitUntil = async deadline => {
-    while (ownedProcessTreeRunning(child) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 25));
-    return !ownedProcessTreeRunning(child);
+    while (pending() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 25));
+    return !pending();
   };
   if (await waitUntil(Date.now() + 1500)) return;
   terminateOwnedProcessTree(child, "SIGKILL");

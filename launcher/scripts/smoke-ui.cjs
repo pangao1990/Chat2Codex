@@ -188,7 +188,9 @@ async function main() {
     await page.getByText("Stopped", {exact:true}).first().waitFor();
     assert.equal(await page.getByLabel("Additional requirements / decisions", {exact:true}).inputValue(), "继续完成并运行测试");
     await page.setViewportSize({width:720,height:760});
-    if (await page.getByRole("button", {name:"Hide sidebar", exact:true}).count()) await navigate(page,"Hide sidebar");
+    // Wait for the responsive state, not the old wide-window button label.
+    await page.locator(".app-shell.is-compact:not(.is-sidebar-open)").waitFor();
+    await page.getByRole("button", {name:"Show sidebar", exact:true}).waitFor();
     await page.locator(".sidebar-backdrop").waitFor({state:"hidden"});
     await screenshot(page,"workbench-home-en-dark.png");
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),"workbench must fit compact viewport");
