@@ -1,7 +1,7 @@
 # Release validation
 
-CI proves that the runtime builds, the launcher starts, and native packages pass their smoke
-contract on macOS, Windows, and Linux. It does not prove an authenticated ChatGPT session, a live
+CI is configured to check runtime builds, launcher startup, and native package smoke
+contracts on macOS, Windows, and Linux; passing evidence must be recorded for each release. It does not prove an authenticated ChatGPT session, a live
 MCP connector, or a complete Codex turn. A release candidate is not ready until those account-bound
 flows are exercised manually on the platforms below.
 
@@ -55,3 +55,17 @@ interactive account flow.
 CI packaging smoke is required. Before claiming interactive Linux support for a release, repeat
 items 2 through 7 under a supported desktop session and record the display server and packaging
 format used.
+
+## Workbench release gates
+
+The Home workbench requires independent evidence in addition to legacy bridge gates:
+
+1. Fresh profile: Codex independent runs with the execution API key while ChatGPT Web remains signed out; no legacy model installation or MCP setup is required.
+2. With a real Web session and API account, run plan → edit → failing test → corrective execution → review → successful verification in a disposable Git repository.
+3. Repeat all three strategies, change strategy during a phase, and verify no later Web request occurs after a Codex lock takes effect. Web lock must pause on expired login/429 instead of silently switching.
+4. Verify native key encryption (including Windows DPAPI, macOS Keychain and a Linux secret service), native directory/save/confirmation dialogs, and default CLI discovery.
+5. Exercise command/file approvals, denial, cancellation and application restart with actual file changes. Inspect the working tree and assert that execution is not blindly replayed.
+6. Confirm API token accounting for cached input, failure and resume; check unknown prices and delayed budget stops against the provider record.
+7. Verify report deletion and local task/credential retention across a packaged upgrade. Export only a redacted test fixture as public release evidence.
+
+Record each result as PASS / FAIL / NOT RUN with version and platform. Keep the build prerelease while a required gate is unexecuted. A local protocol probe (`bun run launcher:check:executor`) uses no account credentials or inference and does not satisfy steps 1–6.

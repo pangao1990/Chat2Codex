@@ -2,7 +2,7 @@
 set -eu
 
 REPOSITORY="${CHAT2CODEX_REPOSITORY:-pangao1990/Chat2Codex}"
-VERSION="${CHAT2CODEX_VERSION:-0.1.0-alpha.0}"
+VERSION="${CHAT2CODEX_VERSION:-1.0.0}"
 BIN_DIR="${CHAT2CODEX_BIN_DIR:-$HOME/.local/bin}"
 LIB_DIR="${CHAT2CODEX_LIB_DIR:-$HOME/.local/lib/chat2codex}"
 DOC_DIR="${CHAT2CODEX_DOC_DIR:-$HOME/.local/share/doc/chat2codex}"

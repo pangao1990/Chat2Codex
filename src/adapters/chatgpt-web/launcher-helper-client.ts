@@ -622,6 +622,7 @@ export class LauncherBrowserHelperClient {
         helperPid: child.pid!,
         status: "failed",
         message: "Launcher browser helper exited before completing the turn",
+        ...(pending.turn.compaction ? { compaction: true } : {}),
       }).then(
         () => this.finishWithError(id, pending.localFailure ?? error),
         controlError => this.finishWithError(

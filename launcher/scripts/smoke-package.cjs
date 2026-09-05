@@ -14,6 +14,7 @@ const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "chat2codex-package-smoke-
 const markerPath = path.join(scratch, "ready.json");
 const coreHome = path.join(scratch, "core-home");
 let macAppBundle;
+let lastProcessOutput = "";
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -24,7 +25,8 @@ function run(command, args, options = {}) {
     timeout: options.timeout || 45_000,
     windowsHide: true,
   });
-  if (result.error) throw result.error;
+  lastProcessOutput = `${result.stdout || ""}\n${result.stderr || ""}`;
+  if (result.error) throw new Error(`${result.error.message}\n${lastProcessOutput.trim()}`, { cause: result.error });
   if (result.status !== 0) {
     throw new Error(
       `${command} failed with status ${result.status}: ${result.stderr?.trim() || result.stdout?.trim() || "no output"}`,
@@ -106,7 +108,9 @@ try {
   }
 
   if (!fs.existsSync(executable)) throw new Error(`Packaged launcher executable is missing: ${executable}`);
+  const startupAt = Date.now();
   run(command, args, { env });
+  process.stdout.write(`PACKAGED_LAUNCHER_STARTUP_MS ${Date.now() - startupAt}\n`);
   if (!fs.existsSync(markerPath)) throw new Error("Packaged launcher did not write its readiness marker");
   const marker = JSON.parse(fs.readFileSync(markerPath, "utf8"));
   if (marker.ok !== true
@@ -139,6 +143,19 @@ try {
     throw new Error(`Packaged launcher installed the wrong durable runtime: ${JSON.stringify(installedManifest)}`);
   }
   process.stdout.write(`PACKAGED_LAUNCHER_SMOKE_OK ${process.platform}/${process.arch}\n`);
+} catch (error) {
+  // Preserve small diagnostics before deleting the isolated profile; never copy browser storage.
+  const diagnostics = path.resolve(launcherRoot, "../output/package-smoke", `failure-${Date.now()}`);
+  fs.mkdirSync(diagnostics, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(diagnostics, "process.log"), lastProcessOutput, { mode: 0o600 });
+  fs.writeFileSync(path.join(diagnostics, "failure.txt"), String(error.stack || error), { mode: 0o600 });
+  for (const name of ["launcher.jsonl", "launcher-fatal.log"]) {
+    const source = path.join(scratch, "launcher-data", "logs", name);
+    if (fs.existsSync(source)) fs.copyFileSync(source, path.join(diagnostics, name));
+  }
+  if (fs.existsSync(markerPath)) fs.copyFileSync(markerPath, path.join(diagnostics, "ready.json"));
+  console.error(`Package smoke diagnostics: ${diagnostics}`);
+  throw error;
 } finally {
   try {
     if (macAppBundle) {

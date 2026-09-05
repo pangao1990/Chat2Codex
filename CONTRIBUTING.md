@@ -1,9 +1,9 @@
-# Contributing
+# Contributing to Chat2Codex
 
-Codex Web GPT was created and is primarily developed and maintained by
-[@miuuyy](https://github.com/miuuyy). Product direction, core architecture, and release decisions
-remain with the creator. Other contributors listed by GitHub have provided focused external fixes
-rather than shared product or architectural ownership.
+Chat2Codex is maintained by [@pangao1990](https://github.com/pangao1990) and is based on
+[miuuyy/codex-chatgpt-web](https://github.com/miuuyy/codex-chatgpt-web). The upstream project and
+contributors retain their copyright and MIT license notices; Chat2Codex product direction,
+integration behavior, and release decisions are managed in this repository.
 
 External contributions are welcome, but this is an intentionally maintainer-led project. Pull
 requests are expected to be small, focused, and easy to review and verify. Good contributions
@@ -13,6 +13,10 @@ platform-specific fixes.
 Before opening a bug report, work through [TROUBLESHOOTING.md](TROUBLESHOOTING.md) and use the
 structured issue form. Reproduce once on the latest release and attach the privacy-safe export from
 **Activity → Export safe log**; never upload raw browser state, credentials, or unredacted logs.
+
+New contributors should start with the project-isolated [development guide](docs/DEVELOPMENT.en.md)
+([简体中文](docs/DEVELOPMENT.md)). It installs the pinned Bun and all persistent dependency caches
+inside the repository; no global Bun, Node.js, or npm installation is required.
 
 Large feature branches, broad refactors, rewrites, new providers, and changes to core behavior or
 architecture are generally not accepted. In rare cases they may be considered, but discuss the
@@ -35,8 +39,8 @@ large unsolicited pull request may be closed even when substantial work went int
 
 ## Before opening a pull request
 
-1. Run `bun install --frozen-lockfile` in the repository root and in `launcher/`.
-2. Run `bun run verify`.
+1. Run `./scripts/setup-local.sh` on macOS/Linux or `scripts\setup-local.cmd` on Windows.
+2. Run `./scripts/bun-local.sh run verify` or `scripts\bun-local.cmd run verify`.
 3. Add a focused regression test for behavior changes.
 4. For browser UI changes, include the observed DOM evidence and a reproducible fixture. Do not
    broaden selectors speculatively.

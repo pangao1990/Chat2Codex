@@ -1,0 +1,61 @@
+.workbench-scroll { max-width: 1040px; padding-top: 28px; }
+.wb-header { margin-bottom: 26px; }
+.wb-header > span { font-size: 12px; color: var(--color-text-accent); letter-spacing: .04em; }
+.wb-header h1 { font-size: clamp(23px, 3vw, 32px); margin: 9px 0; font-weight: 600; }
+.wb-header p, .wb-card p, .wb-strategy p { color: var(--color-text-secondary); line-height: 1.65; }
+.wb-row, .wb-input-row, .wb-actions, .wb-status-row { display: flex; align-items: center; gap: 10px; }
+.wb-row { justify-content: space-between; flex-wrap: wrap; }
+.wb-row h2 { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
+.wb-row small { max-width: 65%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-strategy { position: sticky; top: -1px; z-index: 3; padding: 18px; border: 1px solid var(--color-border-heavy); border-radius: 16px; background: var(--color-background-surface); box-shadow: 0 8px 25px rgb(0 0 0 / 5%); }
+.wb-strategy > small { color: var(--color-text-tertiary); line-height: 1.6; display: block; }
+.wb-strategy p { margin: 10px 0 4px; font-size: 13px; }
+.wb-modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 12px; padding: 5px; border-radius: 12px; background: var(--color-background-control); }
+.wb-modes button { background: transparent; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; min-height: 46px; padding: 8px; border-radius: 9px; border: 1px solid transparent; color: var(--color-text-secondary); font-weight: 500; }
+.wb-modes button[aria-checked="true"] { background: var(--color-background-elevated); border-color: var(--color-border-heavy); color: var(--color-text-primary); box-shadow: 0 2px 6px rgb(0 0 0 / 7%); }
+.wb-modes svg { width: 17px; height: 17px; flex: 0 0 auto; }
+.wb-status-row { flex-wrap: wrap; margin: 18px 0; font-size: 12px; color: var(--color-text-secondary); }
+.wb-status-row span { display: flex; align-items: center; gap: 7px; margin-right: 8px; }
+.wb-status-row i { width: 7px; height: 7px; border-radius: 50%; background: var(--color-text-warning); }
+.wb-status-row i[data-ready="true"] { background: var(--color-text-success); }
+.wb-card { border: 1px solid var(--color-border); border-radius: 16px; padding: 22px; margin: 18px 0; background: var(--color-background-elevated); }
+.wb-card label { display: block; font-size: 13px; font-weight: 500; margin: 12px 0; }
+.workbench-scroll input, .workbench-scroll textarea, .workbench-scroll select { width: 100%; min-width: 0; color: var(--color-text-primary); background: var(--color-background-control); border: 1px solid var(--color-border); border-radius: 8px; padding: 10px 12px; font: inherit; margin-top: 7px; }
+.workbench-scroll textarea { resize: vertical; min-height: 74px; line-height: 1.6; }
+.workbench-scroll input:focus, .workbench-scroll textarea:focus, .workbench-scroll select:focus { outline: 2px solid var(--color-border-focus); outline-offset: 1px; }
+.wb-input-row { align-items: stretch; }
+.wb-input-row > input { flex: 1; }
+.wb-input-row > button { margin-top: 7px; flex-shrink: 0; }
+.wb-input-row > select { width: auto; max-width: 45%; }
+.wb-actions { flex-wrap: wrap; }
+.wb-composer > small { display: block; color: var(--color-text-tertiary); line-height: 1.7; margin-top: 16px; }
+.wb-alert, .wb-approval { margin: 16px 0; padding: 14px; border-radius: 10px; background: var(--color-background-status-warning); overflow-wrap: anywhere; }
+.wb-details { margin: 16px 0 0; border-top: 1px solid var(--color-border); padding-top: 14px; }
+.wb-details summary, .wb-connections > summary { cursor: pointer; font-weight: 550; line-height: 1.6; }
+.workbench-scroll pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 300px; overflow: auto; padding: 12px; background: var(--color-background-control); border-radius: 8px; font: 12px/1.6 var(--font-mono); }
+.wb-details p, .wb-details li { white-space: pre-wrap; overflow-wrap: anywhere; }
+.wb-settings-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.wb-connections p { font-size: 12px; }
+.wb-history { padding: 18px 0 35px; }
+.wb-history-row { background: transparent; color: var(--color-text-primary); border: 0; cursor: pointer; display: flex; width: 100%; justify-content: space-between; text-align: left; gap: 15px; padding: 18px 4px; border-bottom: 1px solid var(--color-border); }
+.wb-history-row:hover { background: var(--color-background-control); }
+.wb-history-row span { min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.wb-history-row span:first-child { flex: 1; }
+.wb-history-row small, .wb-path { color: var(--color-text-tertiary); overflow-wrap: anywhere; }
+.wb-history-row strong { font-size: 13px; overflow-wrap: anywhere; }
+.wb-history-row span:last-child { text-align: right; }
+.wb-empty { text-align: center; padding: 30px 12px; color: var(--color-text-tertiary); line-height: 1.7; }
+.wb-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-block: 1px solid var(--color-border); padding: 16px 0; gap: 10px; margin: 16px 0; }
+.wb-metrics div { display: flex; flex-direction: column; gap: 8px; }
+.wb-metrics small { color: var(--color-text-tertiary); font-size: 11px; }
+.wb-metrics strong { font-size: 21px; font-weight: 550; }
+.wb-task-status { color: var(--color-text-accent); }
+.wb-task-status[data-status="completed"] { color: var(--color-text-success); }
+.wb-timeline { padding: 0; list-style: none; }
+.wb-timeline li { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--color-border-light); font-size: 12px; line-height: 1.6; }
+.wb-timeline time { flex: 0 0 65px; color: var(--color-text-tertiary); }
+@media (max-width: 900px) { .wb-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .wb-card { padding: 15px; } .wb-strategy { padding: 12px; } .wb-modes button { font-size: 12px; gap: 4px; } .wb-modes svg:first-child { display: none; } .wb-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wb-settings-grid { grid-template-columns: 1fr; } }
+
+.wb-modes button:focus-visible, .wb-history-row:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 2px; }
+.wb-modes button:disabled { cursor: default; }

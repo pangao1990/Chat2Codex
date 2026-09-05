@@ -6,6 +6,7 @@ const path = require("node:path");
 const launcherRoot = path.resolve(__dirname, "..");
 const appSource = fs.readFileSync(path.join(launcherRoot, "src", "App.tsx"), "utf8");
 const stylesSource = fs.readFileSync(path.join(launcherRoot, "src", "styles.css"), "utf8");
+const tokensSource = fs.readFileSync(path.join(launcherRoot, "src", "tokens.css"), "utf8");
 const electronMain = fs.readFileSync(path.join(launcherRoot, "electron", "main.cjs"), "utf8");
 const browserHostSource = fs.readFileSync(path.join(launcherRoot, "electron", "browser-host.cjs"), "utf8");
 const preloadSource = fs.readFileSync(path.join(launcherRoot, "electron", "preload.cjs"), "utf8");
@@ -40,6 +41,90 @@ test("closing the launcher follows the persisted background-runtime preference",
     /if \(stateStore\.read\(\)\.keepRunningOnClose && tray\) window\.hide\(\);\s*else void requestQuit\(\);/,
   );
   assert.match(appSource, /setPreference\("keepRunningOnClose", checked\)/);
+});
+
+test("background users get privacy-safe task notifications and tray shortcuts", () => {
+  assert.match(appSource, /setPreference\("taskNotifications", checked\)/);
+  assert.match(appSource, /api!\.onNavigate\(\(next\) => \{/);
+  assert.match(preloadSource, /onNavigate:[\s\S]*?launcher:navigate/);
+  assert.match(electronMain, /trayStatusReady:[\s\S]*?trayBrowser:[\s\S]*?trayUsage:[\s\S]*?traySettings:/);
+  assert.match(electronMain, /send\("launcher:navigate", surface\)/);
+  assert.match(electronMain, /event\?\.status !== "completed" \|\| event\.compaction === true/);
+  assert.match(electronMain, /stateStore\.read\(\)\.taskNotifications !== true/);
+  assert.match(electronMain, /mainWindow\.isFocused\(\)/);
+  assert.match(electronMain, /new Notification\(\{[\s\S]*?taskCompleteTitle[\s\S]*?taskCompleteBody/);
+});
+
+test("light theme is the default and users can persist a dark theme", () => {
+  assert.match(appSource, /data-theme=\{snapshot\.state\.theme\}/);
+  assert.match(appSource, /api!\.setTheme\(next\)/);
+  assert.match(preloadSource, /setTheme:\s*\(theme\)\s*=>\s*ipcRenderer\.invoke\("launcher:set-theme", theme\)/);
+  assert.match(electronMain, /nativeTheme\.themeSource = stateStore\.read\(\)\.theme/);
+  assert.match(electronMain, /handle\("launcher:set-theme"/);
+  assert.match(tokensSource, /\.app-root\[data-theme="dark"\]/);
+});
+
+test("onboarding explains the official app boundary without forcing social actions", () => {
+  assert.match(appSource, /localized\.officialWorkflowTitle/);
+  assert.match(appSource, /localized\.bridgeWorkflowTitle/);
+  assert.match(appSource, /localized\.optionalSupport/);
+  assert.match(appSource, /disabled=\{busy\}\s*onClick=\{isLanguage \? chooseLanguage : finish\}/);
+  assert.doesNotMatch(electronMain, /Open the GitHub and X pages before continuing/);
+});
+
+test("setup and settings explain background runtime and isolated login data", () => {
+  assert.match(appSource, /copy\.backgroundRuntimeNotice/);
+  assert.match(appSource, /copy\.privateSessionNotice/);
+  assert.match(stylesSource, /\.notice-row\.tone-neutral/);
+});
+
+test("setup presents the ChatGPT reasoning to Codex execution readiness pipeline", () => {
+  assert.match(appSource, /<BridgeOverview/);
+  assert.match(appSource, /thinkingReady=\{thinkingReady\}/);
+  assert.match(appSource, /routingReady=\{routingReady\}/);
+  assert.match(appSource, /executionReady=\{executionReady\}/);
+  assert.match(appSource, /meta=\{devProfile \? copy\.optional : copy\.coreGoal\}/);
+  assert.match(stylesSource, /\.bridge-pipeline/);
+  assert.match(stylesSource, /\.bridge-usage-note/);
+  assert.match(appSource, /function initialSurface\(snapshot: LauncherSnapshot\): Surface/);
+  assert.match(appSource, /return "home"/);
+  assert.match(appSource, /onContinueSetup=\{\(\) => navigateSurface\(mcpNeedsSetup \? "mcp" : "setup"\)\}/);
+});
+
+test("the launcher shell uses the production bridge icon as its brand mark", () => {
+  assert.match(appSource, /const APP_ICON = new URL\("\.\.\/assets\/icon-mark\.png", import\.meta\.url\)\.href/);
+  assert.match(appSource, /<img alt="" aria-hidden="true" src=\{APP_ICON\} \/>/);
+  assert.match(stylesSource, /\.brand-mark img/);
+});
+
+test("the launcher exposes usage estimates and GitHub as its only social link", () => {
+  assert.match(appSource, /surface === "usage"/);
+  assert.match(appSource, /api!\.usageSummary\(\)/);
+  assert.match(appSource, /copy\.usageEstimateBody/);
+  assert.match(preloadSource, /launcher:usage-summary/);
+  assert.match(electronMain, /launcher:reset-usage/);
+  assert.match(electronMain, /app\.dock\?\.setIcon\(APP_ICON_PATH\)/);
+  assert.doesNotMatch(appSource, /icon="x"|urls\.x|openSocial\("x"\)/);
+  assert.doesNotMatch(electronMain, /X_URL|x\.com/);
+  assert.match(stylesSource, /\.app-root\[data-language="zh-CN"\][\s\S]*?"PingFang SC"/);
+  assert.match(appSource, /mcpNeedsSetup \? <ActionDot pulse tone="required"/);
+  assert.match(appSource, /const recentTokens = days\.reduce/);
+  assert.match(appSource, /recentTokens === 0/);
+});
+
+test("MCP setup validates credentials early and copies the exact connector name", () => {
+  assert.match(appSource, /const credentialsValid = \/\^tunnel_/);
+  assert.match(appSource, /&& !credentialsValid/);
+  assert.match(appSource, /api!\.copyText\(snapshot\.connectorName\)/);
+  assert.match(preloadSource, /copyText:\s*\(value\)\s*=>\s*ipcRenderer\.invoke\("launcher:copy-text", value\)/);
+  assert.match(electronMain, /handle\("launcher:copy-text"/);
+  assert.match(electronMain, /clipboard\.writeText\(value\)/);
+});
+
+test("Codex route diagnostics use localized user-facing states", () => {
+  assert.match(appSource, /doctorCheckMessage\(copy, check\)/);
+  assert.match(appSource, /check\.message\.startsWith\("Chat2Codex is active"\)/);
+  assert.match(appSource, /copy\.doctorCodexChanged/);
 });
 
 test("normal shutdown persists the ChatGPT session before closing browser views", () => {
@@ -101,18 +186,20 @@ test("macOS passkey sign-in is additive to the unchanged embedded login action",
   assert.match(browserHostSource, /await this\.waitForAuthenticated\(60_000\)[\s\S]*?runSessionInspection\(false\)/);
 });
 
-test("Bigger Context startup recommendation reuses the persisted setting and setup transaction", () => {
+test("Bigger Context startup recommendation is shown once and reuses the setup transaction", () => {
   assert.match(
     appSource,
-    /const \[biggerContextRecommendationOpen, setBiggerContextRecommendationOpen\] = useState\(\s*snapshot\.state\.coreSetupComplete === true && !snapshot\.state\.experimentalBiggerContext,/,
+    /const \[biggerContextRecommendationOpen, setBiggerContextRecommendationOpen\] = useState\(\s*snapshot\.state\.coreSetupComplete === true\s*&& !snapshot\.state\.experimentalBiggerContext\s*&& !snapshot\.state\.biggerContextRecommendationDismissed,/,
   );
   assert.match(appSource, /&& !biggerContextRecommendationOpen;/);
   assert.match(appSource, /updateState\(await api!\.setBiggerContext\(enabled\)\)/);
   assert.match(
     appSource,
-    /<BiggerContextRecommendation[\s\S]*?checked=\{snapshot\.state\.experimentalBiggerContext\}[\s\S]*?onClose=\{\(\) => setBiggerContextRecommendationOpen\(false\)\}/,
+    /<BiggerContextRecommendation[\s\S]*?checked=\{snapshot\.state\.experimentalBiggerContext\}[\s\S]*?onClose=\{\(\) => void dismissBiggerContextRecommendation\(\)\}/,
   );
-  assert.match(appSource, /<Switch checked=\{checked\} disabled=\{busy\} onChange=\{onChange\} \/>/);
+  assert.match(preloadSource, /dismissBiggerContextRecommendation:[\s\S]*?launcher:bigger-context-recommendation-dismiss/);
+  assert.match(electronMain, /launcher:bigger-context-recommendation-dismiss[\s\S]*?biggerContextRecommendationDismissed:\s*true/);
+  assert.match(appSource, /<Switch checked=\{checked\} disabled=\{busy\} label=\{copy\.biggerContext\} onChange=\{onChange\} \/>/);
   assert.match(stylesSource, /\.bigger-context-recommendation-backdrop\s*\{[^}]*position:\s*fixed;/s);
   assert.doesNotMatch(stylesSource, /\.bigger-context-recommendation-backdrop\s*\{[^}]*backdrop-filter:/s);
 });

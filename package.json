@@ -1,8 +1,8 @@
 {
   "name": "chat2codex",
-  "version": "0.1.0-alpha.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "Use ChatGPT as the brain and Codex as the hands, with quality-locked native fallback.",
+  "description": "Use ChatGPT as the brain, Codex as the hands.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/pangao1990/Chat2Codex.git"
@@ -29,7 +29,7 @@
     "dev:launcher": "bun run src/cli.ts dev launcher",
     "dev:chat": "bun run src/cli.ts dev chat",
     "test": "bun test tests/*.test.ts",
-    "audit": "bun audit",
+    "audit": "bun run scripts/audit-dependencies.ts",
     "check-version": "bun run scripts/check-version.ts",
     "typecheck": "bunx tsc --noEmit",
     "licenses": "bun run scripts/generate-third-party-notices.ts --include-launcher",
@@ -49,7 +49,9 @@
     "launcher:typecheck": "bun run --cwd launcher typecheck",
     "launcher:build": "bun run --cwd launcher build",
     "launcher:test": "bun run --cwd launcher test",
-    "verify": "bun run scripts/verify.ts"
+    "launcher:smoke:ui": "bun run --cwd launcher smoke:ui",
+    "verify": "bun run scripts/verify.ts",
+    "launcher:check:executor": "node launcher/scripts/check-executor.cjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -69,7 +71,8 @@
     "typescript": "5.9.3"
   },
   "engines": {
-    "bun": "1.4.0"
+    "bun": "1.4.0",
+    "node": "24.14.0"
   },
   "overrides": {
     "@hono/node-server": "2.0.12",

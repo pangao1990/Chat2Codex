@@ -17,9 +17,91 @@ test("the public launcher command uses the Electron bootstrap", () => {
 
 test("the full verification gate audits launcher dependencies", () => {
   const verify = fs.readFileSync(path.join(repositoryRoot, "scripts", "verify.ts"), "utf8");
-  assert.equal(manifest.scripts.audit, "bun audit");
+  const audit = fs.readFileSync(path.join(repositoryRoot, "scripts", "audit-dependencies.ts"), "utf8");
+  assert.equal(manifest.scripts.audit, "bun run ../scripts/audit-dependencies.ts");
+  assert.equal(repositoryManifest.scripts.audit, "bun run scripts/audit-dependencies.ts");
   assert.equal(repositoryManifest.scripts["launcher:audit"], "bun run --cwd launcher audit");
   assert.match(verify, /await run\(\["run", "launcher:audit"\]\);/);
+  assert.match(audit, /const AUDIT_TIMEOUT_MS = 60_000;/);
+  assert.match(audit, /child\.kill\(\);/);
+});
+
+test("source setup keeps Bun, dependencies, and persistent tool caches inside the repository", () => {
+  const requiredFiles = [
+    "scripts/setup-local.sh",
+    "scripts/setup-local.ps1",
+    "scripts/setup-local.cmd",
+    "scripts/bun-local.sh",
+    "scripts/bun-local.ps1",
+    "scripts/bun-local.cmd",
+    "scripts/node-local.sh",
+    "scripts/node-local.ps1",
+    "scripts/node-local.cmd",
+    "scripts/bootstrap-local-bun.sh",
+    "scripts/bootstrap-local-bun.ps1",
+    "scripts/bootstrap-local-node.sh",
+    "scripts/bootstrap-local-node.ps1",
+    "scripts/select-download-source.sh",
+    "scripts/select-download-source.ps1",
+    "docs/DEVELOPMENT.md",
+    "docs/DEVELOPMENT.en.md",
+    "docs/INSTALLATION.md",
+    "docs/INSTALLATION.en.md",
+  ];
+  for (const relativePath of requiredFiles) {
+    assert.ok(fs.existsSync(path.join(repositoryRoot, relativePath)), `${relativePath} must exist`);
+  }
+
+  const wrappers = [
+    fs.readFileSync(path.join(repositoryRoot, "scripts", "bun-local.sh"), "utf8"),
+    fs.readFileSync(path.join(repositoryRoot, "scripts", "bun-local.ps1"), "utf8"),
+  ];
+  for (const wrapper of wrappers) {
+    for (const localPath of [".tools", ".cache", "electron", "electron-builder", "npm"]) {
+      assert.match(wrapper, new RegExp(localPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    }
+    assert.match(wrapper, /BUN_INSTALL_CACHE_DIR/);
+    assert.match(wrapper, /ELECTRON_CACHE/);
+    assert.match(wrapper, /ELECTRON_BUILDER_CACHE/);
+    assert.match(wrapper, /npm_config_cache/);
+    assert.match(wrapper, /type.*commonjs/);
+  }
+
+  const shellBootstrap = fs.readFileSync(
+    path.join(repositoryRoot, "scripts", "bootstrap-local-bun.sh"),
+    "utf8",
+  );
+  const windowsBootstrap = fs.readFileSync(
+    path.join(repositoryRoot, "scripts", "bootstrap-local-bun.ps1"),
+    "utf8",
+  );
+  for (const bootstrap of [shellBootstrap, windowsBootstrap]) {
+    assert.match(bootstrap, /SHASUMS256\.txt/);
+    assert.match(bootstrap, /SHA-?256/i);
+    assert.match(bootstrap, /\.tools/);
+    assert.match(bootstrap, /\.cache/);
+  }
+  assert.match(windowsBootstrap, /bun-windows-x64-baseline\.zip/);
+  const nodeBootstraps = [
+    fs.readFileSync(path.join(repositoryRoot, "scripts", "bootstrap-local-node.sh"), "utf8"),
+    fs.readFileSync(path.join(repositoryRoot, "scripts", "bootstrap-local-node.ps1"), "utf8"),
+  ];
+  for (const bootstrap of nodeBootstraps) {
+    assert.match(bootstrap, /nodejs\.org\/download\/release/);
+    assert.match(bootstrap, /SHASUMS256\.txt/);
+    assert.match(bootstrap, /\.tools/);
+    assert.match(bootstrap, /\.cache/);
+  }
+  const sourceSelector = fs.readFileSync(
+    path.join(repositoryRoot, "scripts", "select-download-source.sh"),
+    "utf8",
+  );
+  assert.match(sourceSelector, /CHAT2CODEX_SOURCE/);
+  assert.match(sourceSelector, /china\|official/);
+  assert.match(sourceSelector, /time_starttransfer/);
+  for (const bootstrap of [shellBootstrap, windowsBootstrap, ...nodeBootstraps]) {
+    assert.match(bootstrap, /registry\.npmmirror\.com/);
+  }
 });
 
 test("launcher publishes native packages for all supported desktop operating systems", () => {
@@ -38,6 +120,8 @@ test("launcher publishes native packages for all supported desktop operating sys
   assert.ok(manifest.build.asarUnpack.includes("assets/linux-appimage-runner.sh"));
   assert.equal(manifest.build.afterPack, undefined);
   assert.ok(fs.existsSync(path.join(launcherRoot, "assets", "icon.ico")));
+  assert.ok(fs.existsSync(path.join(launcherRoot, "assets", "icon-bridge-white.png")));
+  assert.ok(fs.existsSync(path.join(launcherRoot, "assets", "icon-mark.png")));
   assert.equal(manifest.build.nsis.oneClick, false);
   assert.equal(manifest.build.nsis.perMachine, false);
   assert.equal(manifest.build.nsis.allowElevation, false);

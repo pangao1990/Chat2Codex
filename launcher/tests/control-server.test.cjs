@@ -4,6 +4,7 @@ const { BrowserControlServer } = require("../electron/control-server.cjs");
 
 test("browser control server authenticates and owns turn visibility", async () => {
   const calls = [];
+  const turnEvents = [];
   const logs = [];
   const host = {
     beginTurn: (...args) => {
@@ -28,6 +29,7 @@ test("browser control server authenticates and owns turn visibility", async () =
     },
     getBrowserHost: () => host,
     getPreferences: () => ({ showBrowserDuringTurns: true }),
+    onTurnEnded: (event) => turnEvents.push(event),
   }).start();
   const descriptor = server.descriptor();
   try {
@@ -83,6 +85,18 @@ test("browser control server authenticates and owns turn visibility", async () =
     });
     assert.equal(invalidRefresh.status, 400);
 
+    const invalidCompactionHeartbeat = await fetch(`${descriptor.endpoint}/v1/turn/heartbeat`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${descriptor.token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        phase: "heartbeat",
+        traceId: "abcdef123456",
+        helperPid: process.pid,
+        compaction: true,
+      }),
+    });
+    assert.equal(invalidCompactionHeartbeat.status, 400);
+
     const ownerlessEnd = await fetch(`${descriptor.endpoint}/v1/turn/end`, {
       method: "POST",
       headers: { authorization: `Bearer ${descriptor.token}`, "content-type": "application/json" },
@@ -100,6 +114,7 @@ test("browser control server authenticates and owns turn visibility", async () =
         status: "completed",
         retain: true,
         connectorBound: true,
+        compaction: false,
       }),
     });
     assert.equal(end.status, 200);
@@ -118,6 +133,46 @@ test("browser control server authenticates and owns turn visibility", async () =
     ]);
     assert.equal(logs.some(([, event]) => event === "browser.turn_started"), true);
     assert.equal(logs.some(([, event]) => event === "browser.turn_ended"), true);
+    assert.deepEqual(turnEvents, [{ status: "completed", compaction: false }]);
+  } finally {
+    await server.close();
+  }
+});
+
+test("browser control server marks compaction completion for notification filtering", async () => {
+  const turnEvents = [];
+  const host = {
+    beginTurn: () => ({ surfaceId: "launcher_surface_id_0123456789AB", tabId: "tab-1" }),
+    endTurn: () => ({ cancelledByUser: false }),
+  };
+  const server = await new BrowserControlServer({
+    logger: { info() {}, warn() {} },
+    getBrowserHost: () => host,
+    getPreferences: () => ({ showBrowserDuringTurns: false }),
+    onTurnEnded: (event) => turnEvents.push(event),
+  }).start();
+  const descriptor = server.descriptor();
+  try {
+    const start = await fetch(`${descriptor.endpoint}/v1/turn/start`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${descriptor.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ phase: "start", traceId: "compact123456", helperPid: process.pid }),
+    });
+    assert.equal(start.status, 200);
+
+    const end = await fetch(`${descriptor.endpoint}/v1/turn/end`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${descriptor.token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        phase: "end",
+        traceId: "compact123456",
+        helperPid: process.pid,
+        status: "completed",
+        compaction: true,
+      }),
+    });
+    assert.equal(end.status, 200);
+    assert.deepEqual(turnEvents, [{ status: "completed", compaction: true }]);
   } finally {
     await server.close();
   }

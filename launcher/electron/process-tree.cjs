@@ -14,6 +14,25 @@ function processRunning(pid) {
   }
 }
 
+function ownedProcessTreeRunning(child) {
+  if (!child) return false;
+  if (!Number.isInteger(child.pid) || child.pid < 1) return child.exitCode === null && child.signalCode === null;
+  if (process.platform === "win32") return processRunning(child.pid);
+  try { process.kill(-child.pid, 0); return true; }
+  catch (error) { if (error.code === "ESRCH") return false; throw error; }
+}
+
+async function stopOwnedProcessTree(child) {
+  terminateOwnedProcessTree(child);
+  const waitUntil = async deadline => {
+    while (ownedProcessTreeRunning(child) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 25));
+    return !ownedProcessTreeRunning(child);
+  };
+  if (await waitUntil(Date.now() + 1500)) return;
+  terminateOwnedProcessTree(child, "SIGKILL");
+  if (!await waitUntil(Date.now() + 1500)) throw new Error("Owned process tree did not exit; scheduling must remain stopped");
+}
+
 function terminateOwnedProcessTree(child, signal = "SIGTERM") {
   if (!child) return;
   const pid = child.pid;
@@ -55,4 +74,5 @@ module.exports = {
   DETACH_OWNED_CHILD,
   processRunning,
   terminateOwnedProcessTree,
+  stopOwnedProcessTree,
 };

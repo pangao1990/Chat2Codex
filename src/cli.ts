@@ -26,6 +26,7 @@ import { installRuntimeKeyBytes, managedRuntimeKeyPath, stopTunnel, tunnelStatus
 import { getTunnelServiceStatus, restartTunnelService, startTunnelService, stopTunnelService, uninstallTunnelService } from "./tunnel-service";
 import { VERSION } from "./version";
 import { runDevCommand } from "./dev-chat/cli";
+import { runPlannerCli } from "./planner-cli";
 import {
   ConfigOwnershipError,
   IntegrationManager,
@@ -538,6 +539,7 @@ async function main(): Promise<void> {
   if (command === "help") stdout.write(HELP);
   else if (command === "setup") await setupCommand(args);
   else if (command === "login") await loginCommand(args);
+  else if (command === "planner") { assertNoArgs(args); await runPlannerCli(); }
   else if (command === "doctor" || command === "status") await doctorCommand(args);
   else if (command === "route") await routeCommand(args);
   else if (command === "integration") await integrationCommand(args);

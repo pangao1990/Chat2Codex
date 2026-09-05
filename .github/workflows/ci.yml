@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
 
 permissions:
@@ -32,6 +32,9 @@ jobs:
           if (-not [Environment]::Is64BitOperatingSystem) {
             throw "The Windows CI runner must be 64-bit"
           }
+          foreach ($path in @("scripts/select-download-source.ps1", "scripts/bootstrap-local-bun.ps1", "scripts/bootstrap-local-node.ps1", "scripts/bun-local.ps1", "scripts/node-local.ps1", "scripts/setup-local.ps1")) {
+            [void][scriptblock]::Create((Get-Content $path -Raw))
+          }
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.0
@@ -52,6 +55,9 @@ jobs:
         if: runner.os == 'Linux'
         run: bun run launcher/scripts/prepare-linux-appimage-tools.cjs
       - run: bun run verify
+      - name: Verify launcher UI in Chromium
+        if: runner.os == 'Linux'
+        run: bun run launcher:smoke:ui
       - run: bun run app:package
       - name: Verify Linux AppImage ABI on current Arch
         if: runner.os == 'Linux'

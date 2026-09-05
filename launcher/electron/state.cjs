@@ -7,13 +7,15 @@ const SESSION_REFRESH_REMINDER_INTERVAL_MS = 48 * 60 * 60 * 1000;
 const DEFAULT_STATE = Object.freeze({
   version: 1,
   language: null,
+  theme: "light",
   onboardingComplete: false,
   githubOpened: false,
-  xOpened: false,
   autoStart: true,
   keepRunningOnClose: true,
   showBrowserDuringTurns: true,
+  taskNotifications: true,
   experimentalBiggerContext: false,
+  biggerContextRecommendationDismissed: false,
   browserSmokePassed: false,
   browserSmokeVersion: null,
   sidebarOpen: true,
@@ -33,17 +35,21 @@ function readState(filePath) {
     if (!parsed || parsed.version !== 1) return { ...DEFAULT_STATE };
     const state = { ...DEFAULT_STATE, ...parsed };
     delete state.bridgeEnabled;
-    if (state.language !== null && state.language !== "en" && state.language !== "zh-CN" && state.language !== "ja") {
+    delete state.xOpened;
+    if (state.language === "ja") state.language = "zh-CN";
+    if (state.language !== null && state.language !== "en" && state.language !== "zh-CN") {
       state.language = DEFAULT_STATE.language;
     }
+    if (state.theme !== "light" && state.theme !== "dark") state.theme = DEFAULT_STATE.theme;
     for (const key of [
       "onboardingComplete",
       "githubOpened",
-      "xOpened",
       "autoStart",
       "keepRunningOnClose",
       "showBrowserDuringTurns",
+      "taskNotifications",
       "experimentalBiggerContext",
+      "biggerContextRecommendationDismissed",
       "browserSmokePassed",
       "sidebarOpen",
     ]) {
@@ -95,7 +101,10 @@ function validateSidebarState(value) {
   return { sidebarOpen: value.open, sidebarWidth: Math.round(value.width) };
 }
 
-function createStateStore(filePath) {
+function createStateStore(filePath, onUpdate) {
+  if (onUpdate !== undefined && typeof onUpdate !== "function") {
+    throw new Error("State update listener must be a function");
+  }
   let state = readState(filePath);
   return {
     read() {
@@ -105,7 +114,9 @@ function createStateStore(filePath) {
       const next = { ...state, ...patch, version: 1 };
       writeState(filePath, next);
       state = next;
-      return structuredClone(next);
+      const snapshot = structuredClone(next);
+      onUpdate?.(snapshot);
+      return snapshot;
     },
   };
 }

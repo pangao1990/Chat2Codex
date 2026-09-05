@@ -18,13 +18,15 @@ test("launcher state persists onboarding, language, and autostart atomically", (
     assert.deepEqual(store.read(), {
       version: 1,
       language: null,
+      theme: "light",
       onboardingComplete: false,
       githubOpened: false,
-      xOpened: false,
       autoStart: true,
       keepRunningOnClose: true,
       showBrowserDuringTurns: true,
+      taskNotifications: true,
       experimentalBiggerContext: false,
+      biggerContextRecommendationDismissed: false,
       browserSmokePassed: false,
       browserSmokeVersion: null,
       sidebarOpen: true,
@@ -34,6 +36,7 @@ test("launcher state persists onboarding, language, and autostart atomically", (
     });
     store.update({
       language: "zh-CN",
+      theme: "dark",
       onboardingComplete: true,
       keepRunningOnClose: false,
       browserSmokePassed: true,
@@ -42,13 +45,15 @@ test("launcher state persists onboarding, language, and autostart atomically", (
     assert.deepEqual(createStateStore(file).read(), {
       version: 1,
       language: "zh-CN",
+      theme: "dark",
       onboardingComplete: true,
       githubOpened: false,
-      xOpened: false,
       autoStart: true,
       keepRunningOnClose: false,
       showBrowserDuringTurns: true,
+      taskNotifications: true,
       experimentalBiggerContext: false,
+      biggerContextRecommendationDismissed: false,
       browserSmokePassed: true,
       browserSmokeVersion: "0.2.0",
       sidebarOpen: true,
@@ -58,6 +63,22 @@ test("launcher state persists onboarding, language, and autostart atomically", (
     });
     if (process.platform !== "win32") assert.equal(fs.statSync(file).mode & 0o077, 0);
     assert.equal(fs.readdirSync(root).some(name => name.includes(".tmp-")), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("launcher state publishes durable updates for tray status refresh", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "chat2codex-launcher-state-listener-"));
+  const file = path.join(root, "state.json");
+  const updates = [];
+  try {
+    const store = createStateStore(file, (state) => updates.push(state));
+    store.update({ coreSetupComplete: true });
+    assert.equal(updates.length, 1);
+    assert.equal(updates[0].coreSetupComplete, true);
+    assert.notEqual(updates[0], store.read());
+    assert.throws(() => createStateStore(file, "invalid"), /must be a function/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -73,12 +94,12 @@ test("sidebar state accepts only bounded native shell dimensions", () => {
   assert.throws(() => validateSidebarState({ open: true, width: 900 }), /between 240 and 420/);
 });
 
-test("Japanese is preserved as a supported persisted launcher language", () => {
+test("legacy Japanese preference migrates to the default Chinese language", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "chat2codex-ja-state-"));
   const file = path.join(root, "state.json");
   try {
     fs.writeFileSync(file, JSON.stringify({ version: 1, language: "ja" }));
-    assert.equal(createStateStore(file).read().language, "ja");
+    assert.equal(createStateStore(file).read().language, "zh-CN");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -91,6 +112,7 @@ test("persisted sidebar corruption is repaired without changing the rest of laun
     fs.writeFileSync(file, JSON.stringify({
       version: 1,
       language: "zh-CN",
+      theme: "invalid",
       onboardingComplete: "yes",
       autoStart: "yes",
       bridgeEnabled: false,
@@ -105,13 +127,15 @@ test("persisted sidebar corruption is repaired without changing the rest of laun
     assert.deepEqual(createStateStore(file).read(), {
       version: 1,
       language: "zh-CN",
+      theme: "light",
       onboardingComplete: false,
       githubOpened: false,
-      xOpened: false,
       autoStart: true,
       keepRunningOnClose: true,
       showBrowserDuringTurns: true,
+      taskNotifications: true,
       experimentalBiggerContext: false,
+      biggerContextRecommendationDismissed: false,
       browserSmokePassed: false,
       browserSmokeVersion: null,
       sidebarOpen: true,

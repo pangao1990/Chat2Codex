@@ -104,6 +104,10 @@ one-shot MCP control capability in the exact retained source chat. If that chat 
 fresh tool-free Temporary Chat receives the canonical Codex history; the bridge never parses ordinary
 assistant prose as a structured handoff.
 
+The usage ledger stores aggregate token counts, completed-round counts, daily buckets, and a
+versioned API-equivalent cost estimate only. It never stores prompts, answers, task names, trace IDs,
+cookies, account identifiers, or file contents. Export and reset are explicit user actions.
+
 ## Network exposure
 
 - Responses and health listeners bind to `127.0.0.1` only.
@@ -117,3 +121,11 @@ assistant prose as a structured handoff.
 - Defending against a compromised local OS user or compromised Codex/Electron binary.
 - Bypassing ChatGPT plan, workspace, usage, action-control, or model restrictions.
 - Making consumer browser automation equivalent to a supported OpenAI API contract.
+
+## Workbench task persistence and API execution
+
+Unlike the aggregate legacy usage ledger, the explicit Home workbench stores task requests, plans, summaries, command receipts and resumable executor history under `workbench/`. Records are private files, not encrypted; API keys use Electron safeStorage separately. Linux plaintext credential backends are rejected. Draft requests and the selected task survive page changes in renderer sessionStorage; API keys are never stored there. Task deletion removes the corresponding isolated executor history, not project changes. Explicit task exports contain project context and must be reviewed before sharing.
+
+Only the main process reads decrypted execution keys. The executor gets a dedicated CODEX_HOME and an allowlisted process environment; shell inheritance excludes key/token/secret variables. Command-line provider overrides and an effective-config check prevent accidental recursion through the legacy Web route. Unexpected enabled MCP servers in project config fail the connection check. Unknown server-initiated interactive requests are rejected; command/file approvals require an explicit UI decision. Credentials are not sent in prompts, command-line arguments or task snapshots.
+
+Routing preferences never grant permissions. A hard Web lock pauses on loss of availability, while a hard Codex lock bypasses Web planning/review. Restart requires explicit recovery and inspection of side effects; no automatic task replay occurs. Missing/invalid command evidence requires human acceptance instead of trusting an assistant's test claim. This is an evidence check, not a proof that all user acceptance criteria are satisfied.

@@ -1,5 +1,22 @@
 # Architecture
 
+## Task workbench
+
+The default Home surface adds a separate orchestration path:
+
+```text
+Home strategy + task request
+  → TaskService (private atomic history, queue, phase boundaries)
+  → optional planner CLI → existing tool-free ChatGPT browser worker
+  → CodexExecutor → isolated local app-server stdio → official OpenAI API
+  → command receipts + structured execution result
+  → optional Web review → verified completion or human acceptance
+```
+
+`task-policy.cjs` validates settings/plans and applies deterministic routing rules. `task-service.cjs` owns the persistent state machine, budgets, single-worker queue and explicit recovery. `codex-executor.cjs` handles JSONL framing, RPC requests, approvals, usage and process ownership. It validates effective provider configuration before any execution. `planner-cli.ts` reuses browser lifecycle/lease handling with local tools disabled and bounded stdin/stdout framing. The API key is excluded from shell environment inheritance.
+
+The workbench never installs or reuses the legacy Responses route. Web and execution credentials are separate. See [the workbench guide](workbench.en.md) for storage, limits and release boundaries. The diagrams below describe the retained legacy bridge.
+
 ```text
 Codex app / CLI
       │ Responses API on loopback
@@ -77,6 +94,19 @@ reports a specific migration error when only the legacy identity is visible, and
 the legacy connector. Future public schema changes require another explicit connector identity.
 Repository DEV mode uses `Codex Native2 DEV` so the same ChatGPT account can keep both production
 and development connectors installed without renaming, refreshing, or deleting either one.
+
+### Local usage estimates
+
+Each successfully completed ChatGPT Web adapter round contributes only its aggregate input and
+output token estimates to `runtime/usage-summary.json` under the selected Chat2Codex home. The
+ledger retains up to 90 daily buckets plus lifetime totals. It stores no prompt, answer, task,
+trace, account, cookie, or file identity. The launcher reads the versioned summary through the
+loopback health contract, and provides explicit JSON export and confirmed reset actions.
+
+Savings are API-equivalent estimates, not billing data. The versioned calculator uses the matching
+backend model's published OpenAI Standard short-context input/output prices and exposes its price
+date and source in the summary. Native Codex fallback turns are excluded; Codex-side local execution
+and official account allowance remain outside this estimate.
 
 ## Browser lifecycle
 

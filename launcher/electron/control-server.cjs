@@ -36,10 +36,11 @@ function writeJson(response, status, body) {
 }
 
 class BrowserControlServer {
-  constructor({ logger, getBrowserHost, getPreferences }) {
+  constructor({ logger, getBrowserHost, getPreferences, onTurnEnded }) {
     this.logger = logger;
     this.getBrowserHost = getBrowserHost;
     this.getPreferences = getPreferences;
+    this.onTurnEnded = onTurnEnded;
     this.token = randomBytes(32).toString("base64url");
     this.port = 0;
     this.server = createServer((request, response) => {
@@ -155,6 +156,12 @@ class BrowserControlServer {
       if (body.refreshViewport !== undefined && request.url !== "/v1/turn/heartbeat") {
         throw new Error("refreshViewport is only valid for a turn heartbeat");
       }
+      if (body.compaction !== undefined && typeof body.compaction !== "boolean") {
+        throw new Error("compaction is invalid");
+      }
+      if (body.compaction !== undefined && request.url === "/v1/turn/heartbeat") {
+        throw new Error("compaction is not valid for a turn heartbeat");
+      }
       const preferences = this.getPreferences();
       if (request.url === "/v1/turn/start") {
         const lease = host.beginTurn(
@@ -185,6 +192,13 @@ class BrowserControlServer {
           body.connectorBound === true,
         );
         this.logger.info("browser.turn_ended", { traceId: body.traceId, status: body.status });
+        try {
+          this.onTurnEnded?.({ status: body.status, compaction: body.compaction === true });
+        } catch (error) {
+          this.logger.warn("browser.turn_notification_failed", {
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
         writeJson(response, 200, { ok: true, ...release });
         return;
       }

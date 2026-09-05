@@ -1,4 +1,6 @@
 node_modules/
+.tools/
+.cache/
 dist/
 .*.bun-build
 coverage/
@@ -14,3 +16,12 @@ runtime/
 launcher/build/
 launcher/release/
 launcher/artifacts/
+output/playwright/
+output/package-smoke/
+.playwright-cli/
+
+.playwright-mcp/
+.env.*
+!.env.example
+*.p12
+*.pfx

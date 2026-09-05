@@ -39,6 +39,7 @@ import type { ProviderAdapter } from "./adapters/base";
 import { VERSION } from "./version";
 import { CircuitBreaker } from "./hybrid/circuit-breaker";
 import { allowsAutomaticFallback, classifyFailure } from "./hybrid/failure-classifier";
+import { UsageLedger } from "./usage/ledger";
 
 type HttpTrackedEndpoint = "models" | "responses" | "compact" | "search" | "unspecified";
 
@@ -280,6 +281,13 @@ export interface ResponseRequestOptions {
   rememberState?: boolean;
   /** Observe the exact production adapter stream when invoking the handler in-process. */
   onAdapterEvent?: (event: AdapterEvent) => void;
+  /** Persist privacy-safe aggregate usage without retaining prompts, answers, or task identity. */
+  onUsage?: (record: {
+    model: string;
+    route: string;
+    compaction: boolean;
+    usage: NonNullable<Extract<AdapterEvent, { type: "done" }>["usage"]>;
+  }) => void;
 }
 
 export function routeChatGptWebRequest(parsed: CodexParsedRequest, config: AppConfig): ChatGptWebModelRoute {
@@ -462,6 +470,19 @@ export async function responseRequest(
     try {
       await adapter.runTurn!(parsed, { headers: req.headers, abortSignal: abort.signal }, event => {
         options.onAdapterEvent?.(event);
+        if (event.type === "done" && event.usage) {
+          // Optional accounting must never turn a completed task into a failed response.
+          try {
+            options.onUsage?.({
+              model: route.backendModel,
+              route: route.slug,
+              compaction,
+              usage: event.usage,
+            });
+          } catch {
+            console.warn("[chat2codex] Could not save usage totals for a completed Web turn");
+          }
+        }
         queue.push(event);
       });
     } catch (error) {
@@ -530,7 +551,7 @@ export async function responseRequest(
 export function createHybridResponseHandler(
   config: AppConfig,
   adapterFactory: ChatGptWebAdapterFactory = createChatGptWebAdapter,
-  dependencies: { fetchNative?: NativeFetch } = {},
+  dependencies: { fetchNative?: NativeFetch; usageLedger?: UsageLedger } = {},
 ): (request: Request) => Promise<Response> {
   const circuit = new CircuitBreaker(config.hybrid.circuitBreaker);
   return async (request: Request): Promise<Response> => {
@@ -589,6 +610,9 @@ export function createHybridResponseHandler(
     }
 
     return responseRequest(request, config, adapterFactory, {
+      onUsage(record) {
+        dependencies.usageLedger?.record(record.model, record.usage);
+      },
       onAdapterEvent(event) {
         if (event.type === "done") {
           circuit.recordSuccess(requestedModel);
@@ -610,6 +634,7 @@ export async function compactRequest(
   req: Request,
   config: AppConfig,
   adapterFactory: ChatGptWebAdapterFactory = createChatGptWebAdapter,
+  usageLedger?: UsageLedger,
 ): Promise<Response> {
   const nativeRequest = req.clone();
   let raw: Record<string, unknown>;
@@ -672,7 +697,11 @@ export async function compactRequest(
     body: JSON.stringify({ ...raw, stream: false, input: [...input, { type: "compaction_trigger" }] }),
     signal: req.signal,
   });
-  const response = await responseRequest(internal, config, adapterFactory);
+  const response = await responseRequest(internal, config, adapterFactory, {
+    onUsage(record) {
+      usageLedger?.record(record.model, record.usage);
+    },
+  });
   if (!response.ok) return response;
   let body: {
     output?: unknown[];
@@ -716,7 +745,7 @@ export async function compactRequest(
 
 export function startServer(
   config: AppConfig,
-  dependencies: { fetchUpstream?: NativeFetch } = {},
+  dependencies: { fetchUpstream?: NativeFetch; usageLedger?: UsageLedger } = {},
 ): ReturnType<typeof Bun.serve> {
   if (config.purpose === "dev-harness") {
     throw new Error("DEV harness configuration cannot start a Responses listener");
@@ -735,7 +764,11 @@ export function startServer(
   let successfulModelCatalogRequests = 0;
   let lastSuccessfulModelCatalogRequestAt: string | null = null;
   const httpTurns = new HttpTurnCounter();
-  const hybridResponse = createHybridResponseHandler(config);
+  const usageLedger = dependencies.usageLedger ?? new UsageLedger();
+  const hybridResponse = createHybridResponseHandler(config, createChatGptWebAdapter, {
+    fetchNative: dependencies.fetchUpstream,
+    usageLedger,
+  });
   const activity = () => ({
     active_http_turns: httpTurns.count(),
     active_browser_turns: chatGptTurnSessions.activeCount() + (turnBroker?.externalOwnerActiveCount() ?? 0),
@@ -764,6 +797,7 @@ export function startServer(
           accepting_turns: !draining,
           successful_model_catalog_requests: successfulModelCatalogRequests,
           last_successful_model_catalog_request_at: lastSuccessfulModelCatalogRequestAt,
+          usage_summary: usageLedger.summary(),
           ...activity(),
         });
       }
@@ -807,6 +841,10 @@ export function startServer(
           cancelled_browser_turns: cancelledBrowserTurns,
           ...activity(),
         });
+      }
+      if (req.method === "POST" && url.pathname === "/admin/usage/reset") {
+        if (!controlAuthorized(req)) return new Response("Unauthorized", { status: 401 });
+        return Response.json({ status: "ok", usage_summary: usageLedger.reset() });
       }
       if (req.method === "POST" && url.pathname === "/admin/shutdown") {
         if (!controlAuthorized(req)) return new Response("Unauthorized", { status: 401 });
@@ -877,7 +915,7 @@ export function startServer(
       if (req.method === "POST" && url.pathname === "/v1/responses/compact") {
         if (draining) return formatErrorResponse(503, "server_error", "chat2codex is draining for a requested service operation");
         return httpTurns.track(
-          signal => compactRequest(new Request(req, { signal }), config),
+          signal => compactRequest(new Request(req, { signal }), config, createChatGptWebAdapter, usageLedger),
           req.signal,
           process.platform,
           "compact",

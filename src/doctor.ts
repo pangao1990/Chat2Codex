@@ -140,11 +140,32 @@ export async function runDoctor(): Promise<DoctorReport> {
 
   const codex = inspectCodexIntegration();
   if (!codex.installed) {
-    checks.push({ id: "codex", status: "error", message: "Codex model route is not installed" });
+    checks.push({
+      id: "codex",
+      status: "error",
+      message: "Chat2Codex is not installed; Codex remains on its existing native or externally managed route",
+    });
   } else if (codex.errors.length > 0) {
-    checks.push({ id: "codex", status: "error", message: "Codex integration is inconsistent", detail: codex.errors.join("; ") });
+    checks.push({
+      id: "codex",
+      status: "error",
+      message: "Codex configuration changed after setup; another manager or a newer edit may own the route",
+      detail: codex.errors.join("; "),
+    });
+  } else if (!codex.active) {
+    checks.push({
+      id: "codex",
+      status: "warning",
+      message: "Chat2Codex is disconnected; Codex is using the previously restored native or external route",
+    });
   } else {
-    checks.push({ id: "codex", status: "ok", message: "Codex native model route is installed" });
+    checks.push({
+      id: "codex",
+      status: "ok",
+      message: codex.routeUrl
+        ? `Chat2Codex is active; Codex routes model requests through ${codex.routeUrl}`
+        : "Chat2Codex is active; Codex routes model requests through the local bridge",
+    });
   }
 
   const service = getServiceStatus();

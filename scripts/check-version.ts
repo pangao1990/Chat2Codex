@@ -13,6 +13,10 @@ if (!packageVersion) throw new Error("package.json has no version");
 const packageManagerMatch = /^bun@(\d+\.\d+\.\d+)$/.exec(packageJson.packageManager ?? "");
 if (!packageManagerMatch) throw new Error("package.json must pin an exact Bun packageManager version");
 const bunVersion = packageManagerMatch[1];
+const nodeVersion = packageJson.engines?.node;
+if (!/^\d+\.\d+\.\d+$/.test(nodeVersion ?? "")) {
+  throw new Error("engines.node must pin an exact Node.js version");
+}
 if (Bun.version !== bunVersion) throw new Error(`Expected Bun ${bunVersion}, received ${Bun.version}`);
 if (packageJson.devDependencies?.["@types/bun"] !== bunVersion) {
   throw new Error(`@types/bun is not synchronized to ${bunVersion}`);
@@ -22,8 +26,10 @@ const expected = [
   ["src/version.ts", `export const VERSION = ${JSON.stringify(packageVersion)};`],
   ["src/adapters/chatgpt-web/mcp-server.ts", "version: VERSION"],
   ["scripts/install.sh", `VERSION=\"\${CHAT2CODEX_VERSION:-${packageVersion}}\"`],
-  ["README.md", `requires Bun ${bunVersion}.`],
-  ["README.zh-CN.md", `Bun ${bunVersion}`],
+  ["README.en.md", `Bun ${bunVersion}`],
+  ["README.md", `Bun ${bunVersion}`],
+  ["README.en.md", `Node.js ${nodeVersion}`],
+  ["README.md", `Node.js ${nodeVersion}`],
   ["scripts/install.sh", `Bun-${bunVersion}.md`],
   ["scripts/generate-third-party-notices.ts", `Bun ${bunVersion}`],
   ["scripts/prepare-windows-baseline-bun.ps1", `bun-v$Version`],

@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import {
   useCallback,
   useEffect,
@@ -10,8 +10,10 @@ import {
 } from "react";
 import { copyFor, type Copy } from "./i18n";
 import { Icon, type IconName } from "./icons";
+import { Workbench } from "./Workbench";
 import type {
   BrowserState,
+  DoctorCheck,
   DoctorReport,
   Language,
   LauncherSnapshot,
@@ -19,6 +21,10 @@ import type {
   LogRecord,
   OperationState,
   Surface,
+  Theme,
+  UsageDay,
+  UsageSummary,
+  UsageTotals,
 } from "./types";
 
 const api = window.codexWebLauncher;
@@ -29,6 +35,11 @@ const MCP_GUIDE_MEDIA = [
   new URL("./assets/mcp-connect-connector.gif", import.meta.url).href,
   new URL("./assets/mcp-connect-connector.gif", import.meta.url).href,
 ] as const;
+const APP_ICON = new URL("../assets/icon-mark.png", import.meta.url).href;
+
+function initialSurface(snapshot: LauncherSnapshot): Surface {
+  return "home";
+}
 
 export function App() {
   const [snapshot, setSnapshot] = useState<LauncherSnapshot | null>(null);
@@ -36,7 +47,9 @@ export function App() {
   const [operation, setOperation] = useState<OperationState | null>(null);
   const [logs, setLogs] = useState<LogRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const documentLanguage = snapshot?.state.language ?? "en";
+  const [startupError, setStartupError] = useState<string | null>(null);
+  const [startupAttempt, setStartupAttempt] = useState(0);
+  const documentLanguage = snapshot?.state.language ?? "zh-CN";
 
   useEffect(() => {
     document.documentElement.lang = documentLanguage;
@@ -45,69 +58,103 @@ export function App() {
   useEffect(() => {
     if (!api) return;
     let cancelled = false;
+    let latestState: LauncherState | undefined;
+    let latestBrowser: BrowserState | undefined;
+    let latestOperation: OperationState | undefined;
+    let latestUpdate: LauncherSnapshot["update"] | undefined;
+    const pendingLogs: LogRecord[] = [];
+    setStartupError(null);
+    const timeout = window.setTimeout(() => {
+      cancelled = true;
+      setStartupError(copyFor(documentLanguage).startupTimeout);
+    }, 15_000);
     void api.snapshot().then((next) => {
       if (cancelled) return;
-      setSnapshot(next);
-      setBrowser(next.browser);
-      setLogs(next.logs);
-      setOperation(next.operation);
-      if (next.operation?.status === "failed" && next.operation.name !== "mcp-verification") {
+      window.clearTimeout(timeout);
+      const state = latestState ?? next.state;
+      setSnapshot({ ...next, state, update: latestUpdate ?? next.update,
+        smokePassed: latestState ? smokePassedForState(state, next.version) : next.smokePassed });
+      setBrowser(latestBrowser ?? next.browser);
+      const snapshotLogKeys = new Set(next.logs.map(record => JSON.stringify(record)));
+      setLogs([...next.logs, ...pendingLogs.filter(record => !snapshotLogKeys.has(JSON.stringify(record)))].slice(-300));
+      setOperation(latestOperation ?? next.operation);
+      if (!latestOperation && next.operation?.status === "failed" && next.operation.name !== "mcp-verification") {
         setError(next.operation.message);
       }
-    }).catch((cause) => setError(messageOf(cause)));
+    }).catch((cause) => {
+      window.clearTimeout(timeout);
+      if (!cancelled) setStartupError(messageOf(cause));
+    });
     const unsubscribeState = api.onStateChanged((state) => {
+      latestState = state;
       setSnapshot((current) => current
         ? {
             ...current,
             state,
-            smokePassed: current.smokePassed
-              || (state.browserSmokePassed === true && state.browserSmokeVersion === current.version),
+            smokePassed: smokePassedForState(state, current.version),
           }
         : current);
     });
-    const unsubscribeBrowser = api.onBrowserState(setBrowser);
+    const unsubscribeBrowser = api.onBrowserState((next) => {
+      latestBrowser = next;
+      setBrowser(next);
+    });
     const unsubscribeOperation = api.onOperation((next) => {
+      latestOperation = next;
       setOperation(next);
       if (next.status === "failed" && next.name !== "mcp-verification") setError(next.message);
     });
-    const unsubscribeLog = api.onLog((record) => setLogs((current) => [...current.slice(-299), record]));
+    const unsubscribeLog = api.onLog((record) => {
+      pendingLogs.push(record);
+      if (pendingLogs.length > 300) pendingLogs.shift();
+      setLogs((current) => [...current.slice(-299), record]);
+    });
     const unsubscribeUpdate = api.onUpdateState((update) => {
+      latestUpdate = update;
       setSnapshot((current) => current ? { ...current, update } : current);
     });
     return () => {
       cancelled = true;
+      window.clearTimeout(timeout);
       unsubscribeState();
       unsubscribeBrowser();
       unsubscribeOperation();
       unsubscribeLog();
       unsubscribeUpdate();
     };
-  }, []);
+  }, [startupAttempt]);
 
   const updateState = useCallback((state: LauncherState) => {
     setSnapshot((current) => current
       ? {
           ...current,
           state,
-          smokePassed: current.smokePassed
-            || (state.browserSmokePassed === true && state.browserSmokeVersion === current.version),
+          smokePassed: smokePassedForState(state, current.version),
         }
       : current);
   }, []);
 
-  if (!api) return <FatalMessage message="Launcher IPC is unavailable." />;
-  if (!snapshot) return <LaunchLoading />;
+  const updateSnapshot = useCallback((next: LauncherSnapshot) => {
+    setSnapshot(next);
+    setBrowser(next.browser);
+    setOperation(next.operation);
+  }, []);
 
-  const language = snapshot.state.language ?? "en";
+  if (!api) return <FatalMessage message="启动器 IPC 不可用。" />;
+  if (!snapshot) return startupError
+    ? <FatalMessage message={startupError} onRetry={() => setStartupAttempt((current) => current + 1)} />
+    : <LaunchLoading />;
+
+  const language = snapshot.state.language ?? "zh-CN";
   const copy = copyFor(language);
 
   return (
-    <div
+    <MotionConfig reducedMotion="user"><div
       className="app-root"
       data-language={language}
       data-platform={snapshot.platform}
       data-profile={snapshot.profile}
-      data-theme="dark"
+      data-theme={snapshot.state.theme}
     >
       <AnimatePresence mode="wait">
         {!snapshot.state.onboardingComplete ? (
@@ -129,13 +176,14 @@ export function App() {
             setError={setError}
             snapshot={snapshot}
             updateState={updateState}
+            updateSnapshot={updateSnapshot}
           />
         )}
       </AnimatePresence>
       <AnimatePresence>
         {error ? <ErrorToast copy={copy} message={error} onDismiss={() => setError(null)} /> : null}
       </AnimatePresence>
-    </div>
+    </div></MotionConfig>
   );
 }
 
@@ -169,7 +217,7 @@ function Onboarding({
     }
   };
 
-  const openSocial = async (target: "github" | "x") => {
+  const openSocial = async (target: "github") => {
     setBusy(true);
     setError(null);
     try {
@@ -222,47 +270,59 @@ function Onboarding({
           <span className="welcome-kicker">{isLanguage ? "01" : "02"}</span>
           <h1>{isLanguage ? localized.chooseLanguage : localized.supportTitle}</h1>
           <p>{isLanguage ? localized.chooseLanguageHint : localized.supportBody}</p>
+          <span className="welcome-tagline">{localized.tagline}</span>
 
           {isLanguage ? (
-            <div className="welcome-options" role="radiogroup" aria-label={localized.chooseLanguage}>
-              <WelcomeOption
-                active={selectedLanguage === "en"}
-                detail={localized.english}
-                label={localized.english}
-                marker="EN"
-                onClick={() => setSelectedLanguage("en")}
-              />
+            <div className="welcome-options" role="radiogroup" aria-label={localized.chooseLanguage}
+              onKeyDown={event => {
+                if (busy || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+                event.preventDefault();
+                const next = event.key === "Home" ? "zh-CN" : event.key === "End" ? "en" : selectedLanguage === "en" ? "zh-CN" : "en";
+                setSelectedLanguage(next);
+                event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next === "en" ? 1 : 0]?.focus();
+              }}>
               <WelcomeOption
                 active={selectedLanguage === "zh-CN"}
+                disabled={busy}
                 detail={localized.chinese}
                 label={localized.chinese}
                 marker="简"
                 onClick={() => setSelectedLanguage("zh-CN")}
               />
               <WelcomeOption
-                active={selectedLanguage === "ja"}
-                detail={localized.japanese}
-                label={localized.japanese}
-                marker="日"
-                onClick={() => setSelectedLanguage("ja")}
+                active={selectedLanguage === "en"}
+                disabled={busy}
+                detail={localized.english}
+                label={localized.english}
+                marker="EN"
+                onClick={() => setSelectedLanguage("en")}
               />
             </div>
           ) : (
-            <div className="welcome-options">
-              <WelcomeAction
-                complete={snapshot.state.githubOpened}
-                disabled={busy}
-                icon="github"
-                label={snapshot.state.githubOpened ? localized.starred : localized.star}
-                onClick={() => openSocial("github")}
+            <div className="welcome-workflows">
+              <WelcomeWorkflow
+                body={localized.officialWorkflowBody}
+                marker="01"
+                title={localized.officialWorkflowTitle}
               />
-              <WelcomeAction
-                complete={snapshot.state.xOpened}
-                disabled={busy}
-                icon="x"
-                label={snapshot.state.xOpened ? localized.followed : localized.follow}
-                onClick={() => openSocial("x")}
+              <WelcomeWorkflow
+                body={localized.bridgeWorkflowBody}
+                marker="02"
+                recommended
+                title={localized.bridgeWorkflowTitle}
               />
+              <div className="welcome-support">
+                <span>{localized.optionalSupport}</span>
+                <div className="welcome-support-actions">
+                  <WelcomeAction
+                    complete={snapshot.state.githubOpened}
+                    disabled={busy}
+                    icon="github"
+                    label={snapshot.state.githubOpened ? localized.starred : localized.star}
+                    onClick={() => openSocial("github")}
+                  />
+                </div>
+              </div>
             </div>
           )}
         </motion.section>
@@ -271,7 +331,7 @@ function Onboarding({
       <footer className="welcome-footer">
         <div>
           {!isLanguage ? (
-            <button className="text-button" onClick={() => setStage("language")} type="button">
+            <button className="text-button" disabled={busy} onClick={() => setStage("language")} type="button">
               {localized.previous}
             </button>
           ) : null}
@@ -281,7 +341,7 @@ function Onboarding({
           <span className={!isLanguage ? "is-active" : ""} />
         </div>
         <PrimaryButton
-          disabled={busy || (!isLanguage && (!snapshot.state.githubOpened || !snapshot.state.xOpened))}
+          disabled={busy}
           onClick={isLanguage ? chooseLanguage : finish}
         >
           {isLanguage ? localized.continue : localized.finishWelcome}
@@ -300,6 +360,7 @@ function LauncherShell({
   setError,
   snapshot,
   updateState,
+  updateSnapshot,
 }: {
   browser: BrowserState | null;
   copy: Copy;
@@ -309,19 +370,20 @@ function LauncherShell({
   setError: (error: string | null) => void;
   snapshot: LauncherSnapshot;
   updateState: (state: LauncherState) => void;
+  updateSnapshot: (snapshot: LauncherSnapshot) => void;
 }) {
-  const [surface, setSurface] = useState<Surface>(
-    snapshot.state.coreSetupComplete && snapshot.state.codexCatalogVerified ? "browser" : "setup",
-  );
+  const [surface, setSurface] = useState<Surface>(() => initialSurface(snapshot));
   const devProfile = snapshot.profile === "development";
   const compactAtMount = useRef(window.matchMedia(COMPACT_SIDEBAR_QUERY).matches).current;
-  const [sidebarOpen, setSidebarOpen] = useState(!compactAtMount);
+  const [sidebarOpen, setSidebarOpen] = useState(!compactAtMount && snapshot.state.sidebarOpen);
   const [compactSidebar, setCompactSidebar] = useState(compactAtMount);
   const [browserSlot, setBrowserSlot] = useState<HTMLDivElement | null>(null);
   const [sessionReminderBusy, setSessionReminderBusy] = useState(false);
   const [sessionReminderDue, setSessionReminderDue] = useState(false);
   const [biggerContextRecommendationOpen, setBiggerContextRecommendationOpen] = useState(
-    snapshot.state.coreSetupComplete === true && !snapshot.state.experimentalBiggerContext,
+    snapshot.state.coreSetupComplete === true
+      && !snapshot.state.experimentalBiggerContext
+      && !snapshot.state.biggerContextRecommendationDismissed,
   );
   const [biggerContextRecommendationBusy, setBiggerContextRecommendationBusy] = useState(false);
   const browserSlotRef = useCallback((node: HTMLDivElement | null) => setBrowserSlot(node), []);
@@ -331,7 +393,13 @@ function LauncherShell({
   const needsBrowser = browser?.authenticated !== true;
   const needsSetup = !needsBrowser
     && (snapshot.state.coreSetupComplete !== true || snapshot.state.codexCatalogVerified !== true);
-  const mcpOptional = snapshot.state.codexCatalogVerified === true && snapshot.state.mcpSetupComplete !== true;
+  const mcpNeedsSetup = !devProfile
+    && snapshot.state.codexCatalogVerified === true
+    && snapshot.state.mcpSetupComplete !== true;
+  const workflowReady = browser?.authenticated === true && snapshot.smokePassed
+    && snapshot.state.coreSetupComplete === true
+    && snapshot.state.codexCatalogVerified === true
+    && (devProfile || snapshot.state.mcpSetupComplete === true);
   const updateVisible = ["available", "downloading", "installing"].includes(snapshot.update.status);
   const updateBusy = snapshot.update.status === "downloading" || snapshot.update.status === "installing";
   const updateVersion = "version" in snapshot.update ? snapshot.update.version : null;
@@ -377,7 +445,6 @@ function LauncherShell({
       setCompactSidebar(media.matches);
       setSidebarOpen(!media.matches);
     };
-    apply();
     media.addEventListener("change", apply);
     return () => media.removeEventListener("change", apply);
   }, []);
@@ -414,12 +481,21 @@ function LauncherShell({
       return;
     }
     setSidebarOpen(next);
+    if (!compactSidebar) {
+      void api!.setSidebarState({ open: next, width: snapshot.state.sidebarWidth })
+        .then(updateState).catch((cause) => setError(messageOf(cause)));
+    }
   };
 
   const navigateSurface = (next: Surface) => {
     setSurface(next);
     if (compactSidebar) setSidebarOpen(false);
   };
+
+  useEffect(() => api!.onNavigate((next) => {
+    setSurface(next);
+    if (compactSidebar) setSidebarOpen(false);
+  }), [compactSidebar]);
 
   const installUpdate = async () => {
     setError(null);
@@ -472,6 +548,20 @@ function LauncherShell({
     }
   };
 
+  const dismissBiggerContextRecommendation = async () => {
+    if (biggerContextRecommendationBusy) return;
+    setBiggerContextRecommendationBusy(true);
+    setError(null);
+    try {
+      updateState(await api!.dismissBiggerContextRecommendation());
+      setBiggerContextRecommendationOpen(false);
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setBiggerContextRecommendationBusy(false);
+    }
+  };
+
   return (
     <motion.main
       animate={{ opacity: 1 }}
@@ -498,6 +588,7 @@ function LauncherShell({
       <motion.aside
         animate={{ width: sidebarOpen ? "var(--sidebar-width)" : 0 }}
         className="app-sidebar"
+        inert={!sidebarOpen || biggerContextRecommendationOpen}
         initial={false}
         transition={{ type: "spring", duration: 0.5, bounce: 0.08 }}
       >
@@ -515,16 +606,12 @@ function LauncherShell({
                   label="GitHub"
                   onClick={() => void api!.openExternal(snapshot.urls.github).catch((cause) => setError(messageOf(cause)))}
                 />
-                <IconButton
-                  icon="x"
-                  label="X"
-                  onClick={() => void api!.openExternal(snapshot.urls.x).catch((cause) => setError(messageOf(cause)))}
-                />
               </div>
             </div>
 
             <nav className="sidebar-nav" aria-label={copy.workspace}>
               <SidebarGroup label={copy.workspace}>
+                <SidebarItem active={surface === "home"} icon="activity" label={language === "zh-CN" ? "首页与任务" : "Home & tasks"} onClick={() => navigateSurface("home")} />
                 <SidebarItem
                   active={surface === "browser"}
                   badge={needsBrowser
@@ -547,18 +634,23 @@ function LauncherShell({
                 />
                 <SidebarItem
                   active={surface === "mcp"}
-                  badge={mcpOptional ? <ActionDot tone="optional" /> : null}
+                  badge={mcpNeedsSetup ? <ActionDot pulse tone="required" /> : null}
                   icon="mcp"
                   label="MCP"
                   onClick={() => navigateSurface("mcp")}
                 />
               </SidebarGroup>
               <SidebarGroup label={copy.runtime}>
+                <SidebarItem active={surface === "usage"} icon="usage" label={copy.usage} onClick={() => navigateSurface("usage")} />
                 <SidebarItem active={surface === "activity"} icon="activity" label={copy.activity} onClick={() => navigateSurface("activity")} />
               </SidebarGroup>
             </nav>
 
             <div className="sidebar-footer">
+              <div className="sidebar-readiness" role="status">
+                <StateDot state={workflowReady ? "ready" : "busy"} />
+                <span>{surface === "home" ? (language === "zh-CN" ? "任务连接状态见首页" : "Task connections on Home") : workflowReady ? copy.bridgeReady : copy.bridgeNeedsSetup}</span>
+              </div>
               {updateVisible ? (
                 <SidebarItem
                   active={false}
@@ -580,7 +672,7 @@ function LauncherShell({
         </div>
       </motion.aside>
 
-      <section className="workspace">
+      <section className="workspace" inert={biggerContextRecommendationOpen || (compactSidebar && sidebarOpen)}>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             animate={{ opacity: 1 }}
@@ -590,14 +682,18 @@ function LauncherShell({
             key={surface}
             transition={{ duration: 0.16 }}
           >
+            {surface === "home" ? <Workbench language={language} onLogin={() => { activateBrowser(); void api!.openLogin().catch(e => setError(messageOf(e))); }} /> : null}
             {surface === "browser" ? (
               <BrowserSurface
                 browser={browser}
                 browserSlotRef={browserSlotRef}
                 copy={copy}
                 operation={operation}
+                onContinueSetup={() => navigateSurface(mcpNeedsSetup ? "mcp" : "setup")}
+                onViewUsage={() => navigateSurface("usage")}
                 platform={snapshot.platform}
                 setError={setError}
+                workflowReady={workflowReady}
               />
             ) : null}
             {surface === "setup" ? (
@@ -611,6 +707,7 @@ function LauncherShell({
                 showMcp={() => setSurface("mcp")}
                 snapshot={snapshot}
                 updateState={updateState}
+                updateSnapshot={updateSnapshot}
               />
             ) : null}
             {surface === "mcp" ? (
@@ -622,10 +719,19 @@ function LauncherShell({
                 setError={setError}
                 snapshot={snapshot}
                 updateState={updateState}
+                updateSnapshot={updateSnapshot}
               />
             ) : null}
             {surface === "activity" ? (
               <ActivitySurface copy={copy} language={language} logs={logs} setError={setError} />
+            ) : null}
+            {surface === "usage" ? (
+              <UsageSurface
+                copy={copy}
+                language={language}
+                pricingUrl={snapshot.urls.pricing}
+                setError={setError}
+              />
             ) : null}
             {surface === "settings" ? (
               <SettingsSurface
@@ -635,6 +741,7 @@ function LauncherShell({
                 setError={setError}
                 snapshot={snapshot}
                 updateState={updateState}
+                updateSnapshot={updateSnapshot}
               />
             ) : null}
           </motion.div>
@@ -648,7 +755,7 @@ function LauncherShell({
             checked={snapshot.state.experimentalBiggerContext}
             copy={copy}
             onChange={(enabled) => void setRecommendedBiggerContext(enabled)}
-            onClose={() => setBiggerContextRecommendationOpen(false)}
+            onClose={() => void dismissBiggerContextRecommendation()}
           />
         ) : null}
       </AnimatePresence>
@@ -740,15 +847,21 @@ function BrowserSurface({
   browserSlotRef,
   copy,
   operation,
+  onContinueSetup,
+  onViewUsage,
   platform,
   setError,
+  workflowReady,
 }: {
   browser: BrowserState | null;
   browserSlotRef: (node: HTMLDivElement | null) => void;
   copy: Copy;
   operation: OperationState | null;
+  onContinueSetup: () => void;
+  onViewUsage: () => void;
   platform: string;
   setError: (error: string | null) => void;
+  workflowReady: boolean;
 }) {
   const [passkeyContinuationRequested, setPasskeyContinuationRequested] = useState(false);
   const visible = browser?.visible === true;
@@ -899,14 +1012,28 @@ function BrowserSurface({
         {!visible ? (
           <div className="browser-empty">
             <BrandMark />
+            {browser?.authenticated ? (
+              <span className={`browser-empty-kicker${workflowReady ? " is-ready" : ""}`}>
+                <StateDot state={workflowReady ? "ready" : "busy"} />
+                {workflowReady ? copy.workflowReadyKicker : copy.bridgeNeedsSetup}
+              </span>
+            ) : null}
             <h1>{browser?.authenticated ? copy.noActiveTask : copy.stepAccount}</h1>
             <p>{browser?.authenticated
               ? copy.noActiveTaskBody
               : passkeyWaiting ? copy.passkeyContinueBody : copy.stepAccountBody}</p>
             <div className="browser-empty-actions">
-              <PrimaryButton disabled={passkeyWaiting} onClick={() => void toggle()}>
-                {browser?.authenticated ? copy.openChatgpt : copy.signIn}
+              <PrimaryButton
+                disabled={passkeyWaiting}
+                onClick={browser?.authenticated && !workflowReady ? onContinueSetup : () => void toggle()}
+              >
+                {browser?.authenticated
+                  ? workflowReady ? copy.openChatgpt : copy.continueWorkflowSetup
+                  : copy.signIn}
               </PrimaryButton>
+              {browser?.authenticated && workflowReady ? (
+                <SecondaryButton icon="usage" onClick={onViewUsage}>{copy.viewUsage}</SecondaryButton>
+              ) : null}
               {platform === "darwin" && browser?.authenticated !== true ? (
                 <SecondaryButton
                   disabled={passkeyWaiting && passkeyContinuationRequested}
@@ -939,6 +1066,7 @@ function SetupSurface({
   showMcp,
   snapshot,
   updateState,
+  updateSnapshot,
 }: {
   activateBrowser: (show?: boolean) => Promise<void>;
   browser: BrowserState | null;
@@ -949,6 +1077,7 @@ function SetupSurface({
   showMcp: () => void;
   snapshot: LauncherSnapshot;
   updateState: (state: LauncherState) => void;
+  updateSnapshot: (snapshot: LauncherSnapshot) => void;
 }) {
   const [localBusy, setLocalBusy] = useState(false);
   const [passkeyContinuationRequested, setPasskeyContinuationRequested] = useState(false);
@@ -1003,19 +1132,46 @@ function SetupSurface({
   const smoke = () => run(async () => {
     await activateBrowser();
     await api!.smokeTest();
-    updateState((await api!.snapshot()).state);
+    updateSnapshot(await api!.snapshot());
   });
   const install = () => run(async () => {
     await api!.setupCore();
-    updateState((await api!.snapshot()).state);
+    updateSnapshot(await api!.snapshot());
   });
+  const thinkingReady = browser?.authenticated === true && snapshot.smokePassed;
+  const routingReady = snapshot.state.codexCatalogVerified === true;
+  const executionReady = snapshot.state.mcpSetupComplete === true;
+  const nextAction = !browser?.authenticated ? openLogin : !snapshot.smokePassed ? smoke
+    : !snapshot.state.coreSetupComplete ? install : !routingReady ? null
+    : !executionReady ? showMcp : () => void activateBrowser(true).catch(cause => setError(messageOf(cause)));
 
   return (
     <ContentSurface
       eyebrow={copy.required}
-      subtitle={devProfile ? copy.devSetupSubtitle : copy.setupSubtitle}
+      subtitle={devProfile ? copy.devSetupSubtitle : copy.tagline}
       title={devProfile ? copy.devSetupTitle : copy.setupTitle}
     >
+      <div className="setup-progress" role="status">
+        <span>{copy.nextStep}</span>
+        <strong>{!browser?.authenticated ? copy.stepAccount : !snapshot.smokePassed ? copy.stepSmoke
+          : !snapshot.state.coreSetupComplete ? copy.stepInstall : !routingReady ? copy.awaitingCodex
+          : !executionReady ? copy.configureMcp : copy.bridgeReady}</strong>
+        <small>{[browser?.authenticated === true, snapshot.smokePassed, routingReady, executionReady].filter(Boolean).length} / 4</small>
+        <PrimaryButton disabled={busy || !nextAction} onClick={() => nextAction?.()}>{copy.continue}</PrimaryButton>
+      </div>
+      {!devProfile ? (
+        <BridgeOverview
+          copy={copy}
+          executionReady={executionReady}
+          routingReady={routingReady}
+          thinkingReady={thinkingReady}
+        />
+      ) : null}
+      {!devProfile ? (
+        <NoticeRow icon="activity" tone="neutral">
+          {copy.backgroundRuntimeNotice}
+        </NoticeRow>
+      ) : null}
       <SectionHeading label={devProfile ? copy.devCoreSetup : copy.coreSetup} />
       <div className="setup-list">
         <SetupRow
@@ -1053,7 +1209,7 @@ function SetupSurface({
             : devProfile ? copy.devInstall : copy.install}
           complete={snapshot.state.codexCatalogVerified === true}
           description={devProfile ? copy.devStepInstallBody : copy.stepInstallBody}
-          disabled={busy
+          disabled={busy || !browser?.authenticated
             || (!snapshot.smokePassed && snapshot.state.coreSetupComplete !== true)}
           index={3}
           onAction={install}
@@ -1068,7 +1224,7 @@ function SetupSurface({
         </NoticeRow>
       ) : null}
 
-      <SectionHeading label="MCP" meta={copy.optional} spaced />
+      <SectionHeading label="MCP" meta={devProfile ? copy.optional : copy.coreGoal} spaced />
       <button className="next-surface-row" disabled={!snapshot.state.codexCatalogVerified} onClick={showMcp} type="button">
         <McpMark />
         <span>
@@ -1090,6 +1246,7 @@ function McpSurface({
   setError,
   snapshot,
   updateState,
+  updateSnapshot,
 }: {
   copy: Copy;
   devProfile: boolean;
@@ -1098,6 +1255,7 @@ function McpSurface({
   setError: (error: string | null) => void;
   snapshot: LauncherSnapshot;
   updateState: (state: LauncherState) => void;
+  updateSnapshot: (snapshot: LauncherSnapshot) => void;
 }) {
   const [step, setStep] = useState(Math.min(2, Math.max(0, snapshot.state.mcpGuideStep || 0)));
   const [tunnelId, setTunnelId] = useState("");
@@ -1107,6 +1265,10 @@ function McpSurface({
   const [localBusy, setLocalBusy] = useState(false);
   const busy = localBusy || operation?.status === "running";
   const [doctor, setDoctor] = useState<DoctorReport | null>(null);
+  const [connectorCopied, setConnectorCopied] = useState(false);
+  const normalizedTunnelId = tunnelId.trim();
+  const credentialsValid = /^tunnel_[a-f0-9]{32}$/.test(normalizedTunnelId)
+    && runtimeKey.trim().length >= 20;
   const steps = useMemo(() => [
     { title: copy.mcpStepOne, body: copy.mcpStepOneBody },
     { title: copy.mcpStepTwo, body: copy.mcpStepTwoBody },
@@ -1114,16 +1276,19 @@ function McpSurface({
   ], [copy]);
 
   const move = async (next: number) => {
-    setStep(next);
     updateState(await api!.setMcpStep(next));
+    setStep(next);
   };
   const safeMove = async (next: number) => {
     if (busy) return;
+    setLocalBusy(true);
     setError(null);
     try {
       await move(next);
     } catch (cause) {
       setError(messageOf(cause));
+    } finally {
+      setLocalBusy(false);
     }
   };
   const openExternal = async (url: string) => {
@@ -1142,13 +1307,14 @@ function McpSurface({
       await api!.setupMcp({
         ...(credentialsConfigured && !replacingCredentials
           ? { replace: false }
-          : { tunnelId, runtimeKey, replace: true }),
+          : { tunnelId: normalizedTunnelId, runtimeKey: runtimeKey.trim(), replace: true }),
       });
       setRuntimeKey("");
       setTunnelId("");
       setCredentialsConfigured(true);
       setReplacingCredentials(false);
-      updateState((await api!.snapshot()).state);
+      setDoctor(null);
+      updateSnapshot(await api!.snapshot());
       await move(2);
     } catch (cause) {
       setError(messageOf(cause));
@@ -1163,11 +1329,20 @@ function McpSurface({
     setDoctor(null);
     try {
       setDoctor(await api!.verifyMcp());
-      updateState((await api!.snapshot()).state);
+      updateSnapshot(await api!.snapshot());
     } catch (cause) {
       setError(messageOf(cause));
     } finally {
       setLocalBusy(false);
+    }
+  };
+  const copyConnectorName = async () => {
+    setError(null);
+    try {
+      await api!.copyText(snapshot.connectorName);
+      setConnectorCopied(true);
+    } catch (cause) {
+      setError(messageOf(cause));
     }
   };
 
@@ -1185,6 +1360,7 @@ function McpSurface({
         {steps.map((item, index) => (
           <button
             className={`${index === step ? "is-active" : ""}${index < step ? " is-complete" : ""}`}
+            aria-current={index === step ? "step" : undefined}
             disabled={busy || index > step}
             key={item.title}
             onClick={() => void safeMove(index)}
@@ -1252,6 +1428,7 @@ function McpSurface({
                     <input
                       autoCapitalize="none"
                       autoCorrect="off"
+                      disabled={busy}
                       onChange={(event) => setTunnelId(event.target.value)}
                       placeholder="tunnel_…"
                       spellCheck={false}
@@ -1262,6 +1439,8 @@ function McpSurface({
                     <input
                       autoCapitalize="none"
                       autoCorrect="off"
+                      autoComplete="off"
+                      disabled={busy}
                       onChange={(event) => setRuntimeKey(event.target.value)}
                       placeholder="sk-…"
                       spellCheck={false}
@@ -1283,6 +1462,7 @@ function McpSurface({
                       {copy.keepCredentials}
                     </button>
                   ) : null}
+                  <p className="field-format-hint">{copy.mcpCredentialFormatHint}</p>
                 </div>
               )
             ) : null}
@@ -1298,7 +1478,12 @@ function McpSurface({
                 </NoticeRow>
                 <div className="connector-name">
                   <span>{copy.connectorName}</span>
-                  <code>{snapshot.connectorName}</code>
+                  <div>
+                    <code>{snapshot.connectorName}</code>
+                    <button className="text-button" onClick={() => void copyConnectorName()} type="button">
+                      {connectorCopied ? copy.connectorCopied : copy.copyConnector}
+                    </button>
+                  </div>
                 </div>
                 <div className="inline-actions">
                   <SecondaryButton
@@ -1332,7 +1517,7 @@ function McpSurface({
             disabled={
               busy
               || !snapshot.state.codexCatalogVerified
-              || ((!credentialsConfigured || replacingCredentials) && (!tunnelId || !runtimeKey))
+              || ((!credentialsConfigured || replacingCredentials) && !credentialsValid)
             }
             onClick={() => void install()}
           >
@@ -1356,6 +1541,232 @@ function McpSurface({
   );
 }
 
+function UsageSurface({
+  copy,
+  language,
+  pricingUrl,
+  setError,
+}: {
+  copy: Copy;
+  language: Language;
+  pricingUrl: string;
+  setError: (error: string | null) => void;
+}) {
+  const [summary, setSummary] = useState<UsageSummary | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [exported, setExported] = useState(false);
+  const requestVersion = useRef(0);
+  const refreshing = useRef(false);
+  const actionPending = useRef(false);
+  const active = useRef(false);
+
+  const refresh = useCallback(async (showBusy = false) => {
+    if (refreshing.current || actionPending.current) return;
+    refreshing.current = true;
+    const version = ++requestVersion.current;
+    if (showBusy) setBusy(true);
+    try {
+      const next = await api!.usageSummary();
+      if (next.storageError) throw new Error(next.storageError);
+      if (active.current && version === requestVersion.current) {
+        setSummary(next);
+        setLoadError(null);
+      }
+    } catch (cause) {
+      if (active.current && version === requestVersion.current) setLoadError(messageOf(cause));
+    } finally {
+      if (version === requestVersion.current) {
+        refreshing.current = false;
+        if (active.current && showBusy) setBusy(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    active.current = true;
+    const load = () => { if (!document.hidden) void refresh(); };
+    load();
+    const timer = window.setInterval(load, 5_000);
+    document.addEventListener("visibilitychange", load);
+    return () => {
+      active.current = false;
+      requestVersion.current += 1;
+      refreshing.current = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", load);
+    };
+  }, [refresh]);
+
+  const reset = async () => {
+    if (busy || actionPending.current) return;
+    actionPending.current = true;
+    requestVersion.current += 1;
+    refreshing.current = false;
+    setBusy(true);
+    setResetDone(false);
+    try {
+      const result = await api!.resetUsage();
+      if (active.current) {
+        setSummary(result.summary);
+        setLoadError(null);
+        setResetDone(!result.cancelled);
+      }
+    } catch (cause) {
+      if (active.current) setError(messageOf(cause));
+    } finally {
+      actionPending.current = false;
+      if (active.current) setBusy(false);
+    }
+  };
+
+  const exportSummary = async () => {
+    if (busy || actionPending.current) return;
+    actionPending.current = true;
+    setBusy(true);
+    setExported(false);
+    try {
+      const path = await api!.exportUsage();
+      if (active.current) setExported(path !== null);
+    } catch (cause) {
+      if (active.current) setError(messageOf(cause));
+    } finally {
+      actionPending.current = false;
+      if (active.current) setBusy(false);
+    }
+  };
+
+  const days = useMemo(() => usageLastSevenDays(summary?.days ?? []), [summary?.days]);
+  const recentTokens = days.reduce((total, day) => total + day.totalTokens, 0);
+  const maxDayTokens = Math.max(1, ...days.map(day => day.totalTokens));
+  const lifetime = summary?.lifetime ?? emptyUsageTotals();
+
+  return (
+    <ContentSurface subtitle={copy.usageSubtitle} title={copy.usageTitle}>
+      <div className="usage-toolbar">
+        <span className="usage-estimated-badge" role="status">{busy ? copy.loading : exported ? copy.exportDone : copy.estimated}</span>
+        <div>
+          <SecondaryButton icon="reload" disabled={busy} onClick={() => void refresh(true)}>
+            {copy.usageRefresh}
+          </SecondaryButton>
+          <SecondaryButton
+            icon="external"
+            disabled={busy || !summary}
+            onClick={() => void exportSummary()}
+          >
+            {copy.usageExport}
+          </SecondaryButton>
+        </div>
+      </div>
+
+      {loadError ? <NoticeRow icon="alert" tone="warning">
+        <strong>{summary ? copy.usageStale : copy.usageLoadFailed}</strong>
+        <span className="load-error-detail">{loadError}</span>
+      </NoticeRow> : null}
+      {!summary ? <div className="surface-empty" role="status"><Icon name="usage" /><span>{loadError ? copy.retryHint : copy.loading}</span></div> : <>
+      <div className="usage-hero-grid">
+        <article className="usage-hero-card is-primary">
+          <span>{copy.usageWebTokens}</span>
+          <strong title={formatInteger(lifetime.totalTokens, language)}>{formatCompactTokens(lifetime.totalTokens, language)}</strong>
+          <small>{copy.usageWebTokensBody}</small>
+          <div>
+            <em>{copy.usageInput} {formatCompactTokens(lifetime.inputTokens, language)}</em>
+            <em>{copy.usageOutput} {formatCompactTokens(lifetime.outputTokens, language)}</em>
+          </div>
+        </article>
+        <article className="usage-hero-card is-savings">
+          <span>{copy.usageSavings}</span>
+          <strong>{formatUsd(lifetime.estimatedSavingsUsd, language)}</strong>
+          <small>{copy.usageSavingsBody}</small>
+          {!!lifetime.unpricedTurns && <small>{language === "zh-CN" ? `${lifetime.unpricedTurns} 个回合价格未知，金额未包含这些回合。` : `${lifetime.unpricedTurns} unpriced turns excluded from this value.`}</small>}
+        </article>
+        <article className="usage-hero-card">
+          <span>{copy.usageTurns}</span>
+          <strong>{formatInteger(lifetime.turns, language)}</strong>
+          <small>{copy.usageTurnsBody}</small>
+        </article>
+      </div>
+
+      <div className="usage-period-grid">
+        <UsagePeriod label={copy.usageToday} language={language} totals={summary?.today ?? emptyUsageTotals()} />
+        <UsagePeriod label={copy.usageLast7} language={language} totals={summary?.last7Days ?? emptyUsageTotals()} />
+        <UsagePeriod label={copy.usageLifetime} language={language} totals={lifetime} />
+      </div>
+
+      <section className="usage-trend-card">
+        <header>
+          <span>{copy.usageTrend}</span>
+          <small>{copy.usageWebTokens}</small>
+        </header>
+        {recentTokens === 0 ? (
+          <div className="usage-empty">
+            <Icon name="usage" />
+            <span>{copy.usageNoData}</span>
+          </div>
+        ) : (
+          <div className="usage-bars">
+            {days.map(day => {
+              const height = day.totalTokens === 0 ? 2 : Math.max(8, Math.round((day.totalTokens / maxDayTokens) * 100));
+              return (
+                <div
+                  aria-label={`${formatUsageDate(day.date, language)}: ${formatInteger(day.totalTokens, language)} tokens`}
+                  className="usage-bar-column"
+                  key={day.date}
+                  title={`${formatUsageDate(day.date, language)} · ${formatInteger(day.totalTokens, language)} tokens`}
+                >
+                  <span><i style={{ height: `${height}%` }} /></span>
+                  <small>{formatUsageWeekday(day.date, language)}</small>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+      <p className="usage-updated">{copy.lastUpdated} <time dateTime={summary.generatedAt}>{formatTime(summary.generatedAt, language)}</time></p>
+      </>}
+
+      <section className="usage-method-card">
+        <div>
+          <Icon name="alert" />
+          <span>
+            <strong>{copy.usageEstimateTitle}</strong>
+            <p>{copy.usageEstimateBody}</p>
+            <small>{copy.usagePrivacy}</small>
+          </span>
+        </div>
+        <footer>
+          <span>{summary ? `${copy.usagePricingBasis} ${summary.pricing.asOf}` : copy.estimated}</span>
+          <button
+            className="text-button"
+            onClick={() => void api!.openExternal(pricingUrl).catch((cause) => setError(messageOf(cause)))}
+            type="button"
+          >
+            {copy.usagePricingSource}
+          </button>
+        </footer>
+      </section>
+
+      <div className="usage-danger-row">
+        <span role="status">{resetDone ? copy.usageResetDone : copy.usagePrivacy}</span>
+        <button className="text-button is-danger" disabled={busy || !summary} onClick={() => void reset()} type="button">
+          {copy.usageReset}
+        </button>
+      </div>
+    </ContentSurface>
+  );
+}
+
+function UsagePeriod({ label, language, totals }: { label: string; language: Language; totals: UsageTotals }) {
+  return (
+    <article>
+      <span>{label}</span>
+      <strong>{formatCompactTokens(totals.totalTokens, language)}</strong>
+      <small>{formatUsd(totals.estimatedSavingsUsd, language)} · {formatInteger(totals.turns, language)}</small>
+    </article>
+  );
+}
+
 function ActivitySurface({
   copy,
   language,
@@ -1367,33 +1778,68 @@ function ActivitySurface({
   logs: LogRecord[];
   setError: (error: string | null) => void;
 }) {
+  const [query, setQuery] = useState("");
+  const [level, setLevel] = useState("all");
+  const [exporting, setExporting] = useState(false);
+  const [exported, setExported] = useState(false);
+  const visibleLogs = useMemo(() => {
+    const search = query.trim().toLocaleLowerCase();
+    return [...logs].reverse().filter(record => (level === "all" || record.level === level)
+      && (!search || `${record.event} ${humanEvent(record.event)} ${JSON.stringify(record.detail)}`.toLocaleLowerCase().includes(search)));
+  }, [logs, query, level]);
+  const exportLogs = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExported(false);
+    try { setExported((await api!.exportLogs()) !== null); }
+    catch (cause) { setError(messageOf(cause)); }
+    finally { setExporting(false); }
+  };
   return (
     <ContentSurface subtitle={copy.activitySubtitle} title={copy.activityTitle}>
       <div className="section-heading activity-heading">
         <span>{copy.recentActivity}</span>
         <SecondaryButton
           icon="external"
-          onClick={() => void api!.exportLogs().catch((cause) => setError(messageOf(cause)))}
+          disabled={exporting}
+          onClick={() => void exportLogs()}
         >
           {copy.exportSafeLog}
         </SecondaryButton>
       </div>
+      <div className="activity-filters">
+        <input aria-label={copy.searchActivity} type="search" placeholder={copy.searchActivity}
+          value={query} onChange={event => setQuery(event.target.value)} />
+        <select aria-label={copy.activityLevel} value={level} onChange={event => setLevel(event.target.value)}>
+          <option value="all">{copy.allEvents}</option>
+          <option value="error">{copy.errorEvents}</option>
+          <option value="warning">{copy.warningEvents}</option>
+          <option value="info">{copy.infoEvents}</option>
+          <option value="debug">{copy.debugEvents}</option>
+        </select>
+      </div>
+      <p className="activity-count" role="status">{exported ? copy.exportDone : `${visibleLogs.length} / ${logs.length} · ${copy.recentActivity}`}</p>
       <div className="activity-table">
-        {logs.length === 0 ? (
+        {visibleLogs.length === 0 ? (
           <div className="surface-empty">
             <Icon name="logs" />
-            <span>{copy.noLogs}</span>
+            <span>{logs.length === 0 ? copy.noLogs : copy.noMatchingLogs}</span>
+            {logs.length > 0 ? <button className="text-button" onClick={() => { setQuery(""); setLevel("all"); }} type="button">{copy.clearFilters}</button> : null}
           </div>
         ) : null}
-        {[...logs].reverse().map((record, index) => (
-          <div className="activity-row" key={`${record.at}-${record.event}-${index}`}>
+        {visibleLogs.map((record, index) => (
+          <details className="activity-entry" key={`${record.at}-${record.event}-${index}`}>
+          <summary className="activity-row">
             <StateDot state={record.level === "error" ? "error" : record.level === "warning" ? "busy" : "ready"} />
             <div>
               <strong>{humanEvent(record.event)}</strong>
               <span>{logDetail(record.detail)}</span>
             </div>
-            <time>{formatTime(record.at, language)}</time>
-          </div>
+            <time dateTime={record.at} title={record.at}>{formatTime(record.at, language)}</time>
+            <Icon name="chevron" />
+          </summary>
+          <div className="activity-detail"><strong>{record.level.toUpperCase()} · {record.event}</strong><pre>{JSON.stringify(record.detail, null, 2)}</pre></div>
+          </details>
         ))}
       </div>
     </ContentSurface>
@@ -1407,6 +1853,7 @@ function SettingsSurface({
   setError,
   snapshot,
   updateState,
+  updateSnapshot,
 }: {
   copy: Copy;
   devProfile: boolean;
@@ -1414,6 +1861,7 @@ function SettingsSurface({
   setError: (error: string | null) => void;
   snapshot: LauncherSnapshot;
   updateState: (state: LauncherState) => void;
+  updateSnapshot: (snapshot: LauncherSnapshot) => void;
 }) {
   const [doctor, setDoctor] = useState<DoctorReport | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1467,6 +1915,7 @@ function SettingsSurface({
       const result = await api!.uninstallIntegration();
       if (!result.cancelled) {
         updateState(result.state);
+        updateSnapshot(await api!.snapshot());
         setIntegrationRemoved(true);
       }
     } catch (cause) {
@@ -1483,6 +1932,7 @@ function SettingsSurface({
         {!devProfile ? <SettingRow body={copy.launchAtLoginBody} label={copy.launchAtLogin}>
           <Switch
             checked={snapshot.state.autoStart}
+            label={copy.launchAtLogin}
             onChange={(checked) => void api!.setAutostart(checked)
               .then((result) => updateState(result.state))
               .catch((cause) => setError(messageOf(cause)))}
@@ -1491,6 +1941,7 @@ function SettingsSurface({
         <SettingRow body={devProfile ? copy.devKeepRunningBody : copy.keepRunningOnCloseBody} label={copy.keepRunningOnClose}>
           <Switch
             checked={snapshot.state.keepRunningOnClose}
+            label={copy.keepRunningOnClose}
             onChange={(checked) => void api!.setPreference("keepRunningOnClose", checked)
               .then(updateState)
               .catch((cause) => setError(messageOf(cause)))}
@@ -1499,7 +1950,17 @@ function SettingsSurface({
         <SettingRow body={copy.showDuringTurnsBody} label={copy.showDuringTurns}>
           <Switch
             checked={snapshot.state.showBrowserDuringTurns}
+            label={copy.showDuringTurns}
             onChange={(checked) => void api!.setPreference("showBrowserDuringTurns", checked)
+              .then(updateState)
+              .catch((cause) => setError(messageOf(cause)))}
+          />
+        </SettingRow>
+        <SettingRow body={copy.taskNotificationsBody} label={copy.taskNotifications}>
+          <Switch
+            checked={snapshot.state.taskNotifications}
+            label={copy.taskNotifications}
+            onChange={(checked) => void api!.setPreference("taskNotifications", checked)
               .then(updateState)
               .catch((cause) => setError(messageOf(cause)))}
           />
@@ -1507,6 +1968,7 @@ function SettingsSurface({
         <SettingRow body={copy.biggerContextBody} label={copy.biggerContext}>
           <Switch
             checked={snapshot.state.experimentalBiggerContext}
+            label={copy.biggerContext}
             disabled={busy || snapshot.state.coreSetupComplete !== true}
             onChange={(checked) => void setBiggerContext(checked)}
           />
@@ -1514,11 +1976,26 @@ function SettingsSurface({
         <SettingRow body={copy.chooseLanguageHint} label={copy.language}>
           <LanguageMenu copy={copy} language={language} onChange={(next) => void updateLanguage(next)} />
         </SettingRow>
+        <SettingRow body={copy.themeHint} label={copy.theme}>
+          <ThemeMenu
+            copy={copy}
+            onChange={(next) => void api!.setTheme(next)
+              .then(updateState)
+              .catch((cause) => setError(messageOf(cause)))}
+            theme={snapshot.state.theme}
+          />
+        </SettingRow>
       </div>
 
       {!devProfile && snapshot.state.codexRestartRequired ? (
         <NoticeRow icon="alert" tone="warning">
           {copy.restartCodex}
+        </NoticeRow>
+      ) : null}
+
+      {!devProfile ? (
+        <NoticeRow icon="browser" tone="neutral">
+          {copy.privateSessionNotice}
         </NoticeRow>
       ) : null}
 
@@ -1654,7 +2131,7 @@ function NoticeRow({
 }: {
   children: ReactNode;
   icon: IconName;
-  tone: "warning" | "success";
+  tone: "neutral" | "warning" | "success";
 }) {
   return (
     <div className={`notice-row tone-${tone}`}>
@@ -1672,6 +2149,79 @@ function SettingRow({ body, children, label }: { body: string; children: ReactNo
         <p>{body}</p>
       </div>
       {children}
+    </div>
+  );
+}
+
+function BridgeOverview({
+  copy,
+  executionReady,
+  routingReady,
+  thinkingReady,
+}: {
+  copy: Copy;
+  executionReady: boolean;
+  routingReady: boolean;
+  thinkingReady: boolean;
+}) {
+  const ready = thinkingReady && routingReady && executionReady;
+  return (
+    <section className={`bridge-overview${ready ? " is-ready" : ""}`}>
+      <header>
+        <div>
+          <span>{copy.coreGoal}</span>
+          <h2>{copy.bridgeOverviewTitle}</h2>
+        </div>
+        <small><StateDot state={ready ? "ready" : "busy"} />{ready ? copy.bridgeReady : copy.bridgeNeedsSetup}</small>
+      </header>
+      <p>{copy.bridgeOverviewBody}</p>
+      <div className="bridge-pipeline">
+        <BridgeRole
+          body={copy.thinkingRoleBody}
+          icon="browser"
+          ready={thinkingReady}
+          title={copy.thinkingRole}
+        />
+        <span aria-hidden="true">→</span>
+        <BridgeRole
+          body={copy.routingRoleBody}
+          icon="mcp"
+          ready={routingReady}
+          title={copy.routingRole}
+        />
+        <span aria-hidden="true">→</span>
+        <BridgeRole
+          body={copy.executionRoleBody}
+          icon="setup"
+          ready={executionReady}
+          title={copy.executionRole}
+        />
+      </div>
+      <div className="bridge-usage-note">
+        <Icon name="activity" />
+        <span>{copy.usageBoundary}</span>
+      </div>
+    </section>
+  );
+}
+
+function BridgeRole({
+  body,
+  icon,
+  ready,
+  title,
+}: {
+  body: string;
+  icon: IconName;
+  ready: boolean;
+  title: string;
+}) {
+  return (
+    <div className={`bridge-role${ready ? " is-ready" : ""}`}>
+      <span><Icon name={icon} /></span>
+      <strong>{title}</strong>
+      <p>{body}</p>
+      <StateDot state={ready ? "ready" : "idle"} />
     </div>
   );
 }
@@ -1697,24 +2247,58 @@ function DoctorSummary({ copy, report }: { copy: Copy; report: DoctorReport }) {
       </header>
       <div>
         {visibleChecks.map((check) => (
-          <p key={check.id}>
+          <div className="doctor-check" key={check.id}><p>
             <StateDot state={check.status === "ok" ? "ready" : check.status === "warning" ? "busy" : "error"} />
-            <span>{check.message}</span>
-          </p>
+            <span>{doctorCheckMessage(copy, check)}</span>
+          </p>{check.detail ? <details><summary>{copy.diagnosticDetails}</summary><pre>{check.detail}</pre></details> : null}</div>
         ))}
       </div>
     </div>
   );
 }
 
+function doctorCheckMessage(copy: Copy, check: DoctorCheck): string {
+  if (check.id !== "codex") return check.message;
+  if (check.message.startsWith("Chat2Codex is active")) return copy.doctorCodexActive;
+  if (check.message.startsWith("Chat2Codex is disconnected")) return copy.doctorCodexDisconnected;
+  if (check.message.startsWith("Chat2Codex is not installed")) return copy.doctorCodexNative;
+  if (check.message.startsWith("Codex configuration changed after setup")) return copy.doctorCodexChanged;
+  return check.message;
+}
+
+function WelcomeWorkflow({
+  body,
+  marker,
+  recommended = false,
+  title,
+}: {
+  body: string;
+  marker: string;
+  recommended?: boolean;
+  title: string;
+}) {
+  return (
+    <article className={`welcome-workflow${recommended ? " is-recommended" : ""}`}>
+      <span>{marker}</span>
+      <div>
+        <strong>{title}</strong>
+        <p>{body}</p>
+      </div>
+      {recommended ? <Icon name="check" /> : null}
+    </article>
+  );
+}
+
 function WelcomeOption({
   active,
+  disabled,
   detail,
   label,
   marker,
   onClick,
 }: {
   active: boolean;
+  disabled: boolean;
   detail: string;
   label: string;
   marker: string;
@@ -1723,6 +2307,8 @@ function WelcomeOption({
   return (
     <button
       aria-checked={active}
+      disabled={disabled}
+      tabIndex={active ? 0 : -1}
       className={`welcome-option${active ? " is-active" : ""}`}
       onClick={onClick}
       role="radio"
@@ -1745,7 +2331,7 @@ function WelcomeAction({
 }: {
   complete: boolean;
   disabled?: boolean;
-  icon: "github" | "x";
+  icon: "github";
   label: string;
   onClick: () => void;
 }) {
@@ -1824,17 +2410,20 @@ function IconButton({
 }
 
 function Switch({
+  label,
   checked,
   disabled = false,
   onChange,
 }: {
   checked: boolean;
+  label: string;
   disabled?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   return (
     <button
       aria-checked={checked}
+      aria-label={label}
       className={`switch${checked ? " is-on" : ""}`}
       disabled={disabled}
       onClick={() => onChange(!checked)}
@@ -1847,60 +2436,20 @@ function Switch({
 }
 
 function LanguageMenu({ copy, language, onChange }: { copy: Copy; language: Language; onChange: (language: Language) => void }) {
-  const [open, setOpen] = useState(false);
-  const options: Array<{ label: string; value: Language }> = [
-    { label: copy.english, value: "en" },
-    { label: copy.chinese, value: "zh-CN" },
-    { label: copy.japanese, value: "ja" },
-  ];
-  const selected = options.find((option) => option.value === language) ?? options[0];
-
   return (
-    <div
-      className={`language-menu${open ? " is-open" : ""}`}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") setOpen(false);
-      }}
-    >
-      <button
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        className="language-menu-trigger"
-        onClick={() => setOpen((current) => !current)}
-        type="button"
-      >
-        <span>{selected.label}</span>
-        <Icon name="chevron" />
-      </button>
-      {open ? (
-        <>
-          <button
-            aria-label={`${copy.close}: ${copy.language}`}
-            className="language-menu-scrim"
-            onClick={() => setOpen(false)}
-            type="button"
-          />
-          <div aria-label={copy.language} className="language-menu-panel" role="listbox">
-            {options.map((option) => (
-              <button
-                aria-selected={option.value === language}
-                className={option.value === language ? "is-selected" : ""}
-                key={option.value}
-                onClick={() => {
-                  setOpen(false);
-                  if (option.value !== language) onChange(option.value);
-                }}
-                role="option"
-                type="button"
-              >
-                <span>{option.label}</span>
-                {option.value === language ? <Icon name="check" /> : null}
-              </button>
-            ))}
-          </div>
-        </>
-      ) : null}
-    </div>
+    <select className="preference-select" aria-label={copy.language} value={language} onChange={event => onChange(event.target.value as Language)}>
+      <option value="zh-CN">{copy.chinese}</option>
+      <option value="en">{copy.english}</option>
+    </select>
+  );
+}
+
+function ThemeMenu({ copy, onChange, theme }: { copy: Copy; onChange: (theme: Theme) => void; theme: Theme }) {
+  return (
+    <select className="preference-select" aria-label={copy.theme} value={theme} onChange={event => onChange(event.target.value as Theme)}>
+      <option value="light">{copy.lightTheme}</option>
+      <option value="dark">{copy.darkTheme}</option>
+    </select>
   );
 }
 
@@ -1915,12 +2464,7 @@ function ActionDot({ pulse = false, tone }: { pulse?: boolean; tone: "required" 
 function BrandMark({ small = false }: { small?: boolean }) {
   return (
     <span className={`brand-mark${small ? " is-small" : ""}`}>
-      <svg aria-hidden="true" viewBox="0 0 24 24">
-        <path
-          d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"
-          fill="currentColor"
-        />
-      </svg>
+      <img alt="" aria-hidden="true" src={APP_ICON} />
     </span>
   );
 }
@@ -1930,6 +2474,7 @@ function ErrorToast({ copy, message, onDismiss }: { copy: Copy; message: string;
     <motion.div
       animate={{ opacity: 1, y: 0 }}
       className="error-toast"
+      role="alert"
       exit={{ opacity: 0, y: 8 }}
       initial={{ opacity: 0, y: 8 }}
       transition={PANEL_TRANSITION}
@@ -1994,8 +2539,39 @@ function BiggerContextRecommendation({
   onChange: (checked: boolean) => void;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef({ busy, onClose });
+  closeRef.current = { busy, onClose };
+  useEffect(() => {
+    const previous = document.activeElement;
+    const dialog = dialogRef.current;
+    dialog?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (!closeRef.current.busy) closeRef.current.onClose();
+      }
+      if (event.key !== "Tab" || !dialog) return;
+      const controls = [...dialog.querySelectorAll<HTMLElement>('button:not(:disabled), [tabindex="0"]')];
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (!first || !last) { event.preventDefault(); dialog.focus(); return; }
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialog)) {
+        event.preventDefault(); first.focus();
+      }
+    };
+    dialog?.addEventListener("keydown", onKeyDown);
+    return () => {
+      dialog?.removeEventListener("keydown", onKeyDown);
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    };
+  }, []);
   return (
     <motion.div
+      ref={dialogRef}
+      tabIndex={-1}
       animate={{ opacity: 1 }}
       aria-describedby="bigger-context-recommendation-body"
       aria-labelledby="bigger-context-recommendation-title"
@@ -2023,7 +2599,7 @@ function BiggerContextRecommendation({
             <strong>{copy.biggerContext}</strong>
             <p>{copy.biggerContextRecommendationToggleBody}</p>
           </div>
-          <Switch checked={checked} disabled={busy} onChange={onChange} />
+          <Switch checked={checked} disabled={busy} label={copy.biggerContext} onChange={onChange} />
         </div>
         {checked ? <p className="bigger-context-recommendation-restart">{copy.restartCodex}</p> : null}
         <footer>
@@ -2047,14 +2623,19 @@ function LaunchLoading() {
   );
 }
 
-function FatalMessage({ message }: { message: string }) {
+function FatalMessage({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <main className="fatal-message">
       <BrandMark />
       <h1>Chat2Codex</h1>
-      <p>{message}</p>
+      <p role="alert">{message}</p>
+      {onRetry ? <PrimaryButton onClick={onRetry}>重试 / Retry</PrimaryButton> : null}
     </main>
   );
+}
+
+function smokePassedForState(state: LauncherState, version: string): boolean {
+  return state.browserSmokePassed === true && state.browserSmokeVersion === version;
 }
 
 function browserTabTitleFromTitle(value: string | undefined, copy: Copy): string {
@@ -2108,9 +2689,62 @@ function formatTime(value: string, language: Language): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? value
-    : date.toLocaleTimeString(language === "ja" ? "ja-JP" : language === "zh-CN" ? "zh-CN" : "en", {
+    : date.toLocaleTimeString(language === "zh-CN" ? "zh-CN" : "en", {
         hour: "2-digit",
         minute: "2-digit",
         second: "2-digit",
       });
+}
+
+function emptyUsageTotals(): UsageTotals {
+  return { turns: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedSavingsUsd: 0 };
+}
+
+function formatInteger(value: number, language: Language): string {
+  return new Intl.NumberFormat(language === "zh-CN" ? "zh-CN" : "en-US").format(value);
+}
+
+function formatCompactTokens(value: number, language: Language): string {
+  if (value < 1_000) return formatInteger(value, language);
+  return new Intl.NumberFormat(language === "zh-CN" ? "zh-CN" : "en-US", {
+    notation: "compact",
+    maximumFractionDigits: value >= 100_000 ? 1 : 2,
+  }).format(value);
+}
+
+function formatUsd(value: number, language: Language): string {
+  const digits = value > 0 && value < 0.01 ? 4 : 2;
+  return new Intl.NumberFormat(language === "zh-CN" ? "zh-CN" : "en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+}
+
+function usageLastSevenDays(recorded: UsageDay[], now = new Date()): UsageDay[] {
+  const byDate = new Map(recorded.map(day => [day.date, day]));
+  return Array.from({ length: 7 }, (_, reverseOffset) => {
+    const date = new Date(now);
+    date.setHours(12, 0, 0, 0);
+    date.setDate(date.getDate() - (6 - reverseOffset));
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    return byDate.get(key) ?? { date: key, ...emptyUsageTotals() };
+  });
+}
+
+function usageDate(value: string): Date {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year || 1970, (month || 1) - 1, day || 1, 12);
+}
+
+function formatUsageDate(value: string, language: Language): string {
+  return usageDate(value).toLocaleDateString(language === "zh-CN" ? "zh-CN" : "en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatUsageWeekday(value: string, language: Language): string {
+  return usageDate(value).toLocaleDateString(language === "zh-CN" ? "zh-CN" : "en-US", { weekday: "short" });
 }

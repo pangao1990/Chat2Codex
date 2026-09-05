@@ -6,12 +6,15 @@ const { pathToFileURL } = require("node:url");
 const {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   Menu,
   nativeImage,
   nativeTheme,
+  Notification,
   screen,
+  safeStorage,
   shell,
   Tray,
 } = require("electron");
@@ -25,11 +28,19 @@ const {
   registerLoggedIpc,
 } = require("./logging.cjs");
 const { RuntimeHost } = require("./runtime.cjs");
+const { TaskService } = require("./task-service.cjs");
+const { runtimeInvocation } = require("./runtime-command.cjs");
 const { ensurePackagedRuntime, waitForPackagedRuntimeSource } = require("./runtime-install.cjs");
 const { RuntimeSupervisor } = require("./runtime-supervisor.cjs");
 const { DEVELOPMENT_PROFILE, resolveLauncherProfile } = require("./profile.cjs");
 const { runtimeBundlePaths } = require("./runtime-command.cjs");
 const { createUpdateController } = require("./update.cjs");
+const {
+  USAGE_PRICING_SOURCE,
+  exportUsageSummary,
+  resetRuntimeUsage,
+  usageSummary,
+} = require("./usage.cjs");
 const {
   createStateStore,
   nextSessionRefreshReminderAt,
@@ -51,13 +62,14 @@ const BROWSER_HELPER_PATH = app.isPackaged
   ? path.join(process.resourcesPath, "runtime", "app", "browser-helper.cjs")
   : path.join(SOURCE_ROOT, ".launcher-runtime", "browser-helper.cjs");
 const GITHUB_URL = "https://github.com/pangao1990/Chat2Codex";
-const X_URL = "https://x.com/miu21590";
+const PRICING_URL = USAGE_PRICING_SOURCE;
 const CONNECTORS_URL = "https://chatgpt.com/#settings/Plugins";
 const TUNNELS_URL = "https://platform.openai.com/settings/organization/tunnels";
 const KEYS_URL = "https://platform.openai.com/settings/organization/api-keys";
-const ALLOWED_EXTERNAL_URLS = new Set([GITHUB_URL, X_URL, CONNECTORS_URL, TUNNELS_URL, KEYS_URL]);
+const ALLOWED_EXTERNAL_URLS = new Set([GITHUB_URL, PRICING_URL, CONNECTORS_URL, TUNNELS_URL, KEYS_URL]);
 const PACKAGED_RENDERER_URL = pathToFileURL(path.join(__dirname, "..", "dist", "index.html")).href;
 const APP_ICON_PATH = path.join(__dirname, "..", "assets", "icon.png");
+const USAGE_PATH = path.join(CORE_HOME, "runtime", "usage-summary.json");
 
 process.env.CHAT2CODEX_HOME = CORE_HOME;
 process.env.CODEX_HOME = LAUNCHER_PROFILE.codexHome;
@@ -89,6 +101,7 @@ let lastOperation = null;
 let catalogVerificationTimer = null;
 let catalogVerificationInFlight = false;
 let updateController = null;
+let taskService = null;
 
 function findFreePort() {
   return new Promise((resolve, reject) => {
@@ -191,6 +204,15 @@ function trayImage() {
 const NATIVE_COPY = Object.freeze({
   en: Object.freeze({
     openLauncher: "Open Chat2Codex",
+    trayStatusReady: "● Thinking and execution ready",
+    trayStatusMcp: "● Finish MCP setup",
+    trayStatusSetup: "● Finish connection setup",
+    trayBrowser: "Browser workspace",
+    traySetup: "Connection setup",
+    trayUsage: "Usage & value",
+    traySettings: "Preferences",
+    taskCompleteTitle: "ChatGPT Web task complete",
+    taskCompleteBody: "Open Codex to review the result.",
     quit: "Quit",
     exportDiagnostics: "Export privacy-safe diagnostics",
     cancel: "Cancel",
@@ -198,9 +220,23 @@ const NATIVE_COPY = Object.freeze({
     removeTitle: "Remove Chat2Codex",
     removeMessage: "Remove the ChatGPT Web models from Codex and restore the previous model route?",
     removeDetail: "The launcher's ChatGPT login profile will be preserved. Codex must be restarted once.",
+    exportUsage: "Export usage estimate",
+    resetUsageTitle: "Reset usage estimates",
+    resetUsageMessage: "Reset all locally recorded ChatGPT Web token and savings estimates?",
+    resetUsageDetail: "This removes aggregate counts only. It does not affect ChatGPT, Codex, or billing data.",
+    resetUsage: "Reset",
   }),
   "zh-CN": Object.freeze({
     openLauncher: "打开 Chat2Codex",
+    trayStatusReady: "● 思考与执行闭环已就绪",
+    trayStatusMcp: "● 需要完成 MCP 设置",
+    trayStatusSetup: "● 需要完成连接设置",
+    trayBrowser: "浏览器工作区",
+    traySetup: "连接设置",
+    trayUsage: "用量与等效价值",
+    traySettings: "偏好设置",
+    taskCompleteTitle: "ChatGPT Web 任务已完成",
+    taskCompleteBody: "请打开 Codex 查看结果。",
     quit: "退出",
     exportDiagnostics: "导出隐私安全诊断",
     cancel: "取消",
@@ -208,38 +244,60 @@ const NATIVE_COPY = Object.freeze({
     removeTitle: "移除 Chat2Codex",
     removeMessage: "从 Codex 中移除 ChatGPT Web 模型并恢复此前的模型路由？",
     removeDetail: "启动器中的 ChatGPT 登录 profile 会保留。Codex 需要重启一次。",
-  }),
-  ja: Object.freeze({
-    openLauncher: "Chat2Codex を開く",
-    quit: "終了",
-    exportDiagnostics: "プライバシー保護済みの診断情報をエクスポート",
-    cancel: "キャンセル",
-    remove: "削除",
-    removeTitle: "Chat2Codex を削除",
-    removeMessage: "Codex から ChatGPT Web モデルを削除し、以前のモデルルートを復元しますか？",
-    removeDetail: "ランチャーの ChatGPT ログインプロファイルは保持されます。Codex を一度再起動する必要があります。",
+    exportUsage: "导出用量估算",
+    resetUsageTitle: "清零用量估算",
+    resetUsageMessage: "清零本机记录的全部 ChatGPT Web Token 与节省金额估算？",
+    resetUsageDetail: "只删除聚合计数，不影响 ChatGPT、Codex 或任何账单数据。",
+    resetUsage: "清零",
   }),
 });
 
 function nativeCopyFor(language) {
-  return NATIVE_COPY[language] || NATIVE_COPY.en;
+  return NATIVE_COPY[language] || NATIVE_COPY["zh-CN"];
 }
 
-function updateTrayMenu(language) {
+function navigateLauncher(surface) {
+  showMainWindow();
+  send("launcher:navigate", surface);
+}
+
+function updateTrayMenu(language, state = {}) {
   if (!tray) return;
   const copy = nativeCopyFor(language);
+  const workflowReady = state.coreSetupComplete === true
+    && state.codexCatalogVerified === true
+    && (IS_DEV_PROFILE || state.mcpSetupComplete === true);
+  const workbench = taskService?.snapshot();
+  const taskStatus = workbench?.keyConfigured
+    ? (language === "zh-CN" ? "● 任务执行器已配置" : "● Task executor configured") : null;
+  const status = taskStatus || (workflowReady
+    ? copy.trayStatusReady
+    : !IS_DEV_PROFILE && state.codexCatalogVerified === true
+      ? copy.trayStatusMcp
+      : copy.trayStatusSetup);
   tray.setContextMenu(Menu.buildFromTemplate([
+    { label: status, enabled: false },
+    { type: "separator" },
     { label: copy.openLauncher, click: () => showMainWindow() },
+    { label: language === "zh-CN" ? "首页与任务" : "Home & tasks", click: () => navigateLauncher("home") },
+    ...(workbench ? [{ label: language === "zh-CN" ? "新任务默认策略" : "Default task strategy", submenu: [
+      ["auto", "自动选择", "Automatic"], ["chatgpt", "ChatGPT 规划", "ChatGPT plans"], ["codex", "Codex 独立", "Codex independent"],
+    ].map(([mode, zh, en]) => ({ label: language === "zh-CN" ? zh : en, type: "radio", checked: workbench.settings.mode === mode,
+      click: () => { try { taskService.configure({ mode }); } catch (error) { publishOperation({ name: "strategy", status: "failed", message: error.message }); } } })) }] : []),
+    { label: copy.trayBrowser, click: () => navigateLauncher("browser") },
+    { label: copy.traySetup, click: () => navigateLauncher("setup") },
+    { label: copy.trayUsage, click: () => navigateLauncher("usage") },
+    { label: copy.traySettings, click: () => navigateLauncher("settings") },
     { type: "separator" },
     { label: copy.quit, click: () => { void requestQuit(); } },
   ]));
 }
 
-function createTray(logger, language) {
+function createTray(logger, language, state) {
   try {
     tray = new Tray(trayImage());
     tray.setToolTip(LAUNCHER_PROFILE.displayName);
-    updateTrayMenu(language);
+    updateTrayMenu(language, state);
     tray.on("click", () => showMainWindow());
     return true;
   } catch (error) {
@@ -247,6 +305,25 @@ function createTray(logger, language) {
     logger.warn("launcher.tray_unavailable", { message: error instanceof Error ? error.message : String(error) });
     return false;
   }
+}
+
+function notifyTaskComplete(stateStore, logger, event) {
+  if (event?.status !== "completed" || event.compaction === true) return;
+  if (stateStore.read().taskNotifications !== true) return;
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) return;
+  if (!Notification.isSupported()) {
+    logger.debug?.("launcher.task_notification_unsupported");
+    return;
+  }
+  const copy = nativeCopyFor(stateStore.read().language);
+  const notification = new Notification({
+    title: copy.taskCompleteTitle,
+    body: copy.taskCompleteBody,
+    icon: APP_ICON_PATH,
+  });
+  notification.on("click", () => showMainWindow());
+  notification.show();
+  logger.info("launcher.task_notification_shown");
 }
 
 function showMainWindow() {
@@ -262,6 +339,17 @@ async function openWebUrl(url) {
     throw new Error(`Refusing to open a non-web URL: ${parsed.protocol}`);
   }
   await shell.openExternal(parsed.toString());
+}
+
+async function currentUsageSummary() {
+  try {
+    const config = runtimeSupervisor?.readConfig();
+    if (config) {
+      const health = await runtimeSupervisor.proxyHealthPayload(config);
+      if (health?.usage_summary?.version === 1) return health.usage_summary;
+    }
+  } catch {}
+  return usageSummary(USAGE_PATH);
 }
 
 function rendererNavigationAllowed(value) {
@@ -293,6 +381,7 @@ function windowStateSnapshot(window) {
 function createWindow({ logger, stateStore, windowStatePath, startHidden }) {
   const isMac = process.platform === "darwin";
   const state = stateStore.read();
+  const darkTheme = state.theme === "dark";
   const windowState = readWindowState(windowStatePath, screen.getAllDisplays());
   const window = new BrowserWindow({
     width: windowState.bounds.width,
@@ -305,7 +394,7 @@ function createWindow({ logger, stateStore, windowStatePath, startHidden }) {
     title: LAUNCHER_PROFILE.displayName,
     icon: APP_ICON_PATH,
     show: false,
-    backgroundColor: isMac ? "#00000000" : "#181818",
+    backgroundColor: isMac ? "#00000000" : darkTheme ? "#181818" : "#ffffff",
     titleBarStyle: isMac ? "hiddenInset" : "hidden",
     transparent: isMac,
     ...(isMac ? {
@@ -314,8 +403,8 @@ function createWindow({ logger, stateStore, windowStatePath, startHidden }) {
       visualEffectState: "active",
     } : {
       titleBarOverlay: {
-        color: "#181818",
-        symbolColor: "#a8a8a8",
+        color: darkTheme ? "#181818" : "#ffffff",
+        symbolColor: darkTheme ? "#a8a8a8" : "#505050",
         height: 46,
       },
     }),
@@ -382,10 +471,29 @@ async function loadRenderer(window) {
 }
 
 function validateLanguage(value) {
-  if (value !== "en" && value !== "zh-CN" && value !== "ja") {
-    throw new Error("Language must be en, zh-CN, or ja");
+  if (value !== "en" && value !== "zh-CN") {
+    throw new Error("Language must be zh-CN or en");
   }
   return value;
+}
+
+function validateTheme(value) {
+  if (value !== "light" && value !== "dark") {
+    throw new Error("Theme must be light or dark");
+  }
+  return value;
+}
+
+function applyWindowTheme(window, theme) {
+  nativeTheme.themeSource = theme;
+  if (!window || window.isDestroyed() || process.platform === "darwin") return;
+  const dark = theme === "dark";
+  window.setBackgroundColor(dark ? "#181818" : "#ffffff");
+  window.setTitleBarOverlay({
+    color: dark ? "#181818" : "#ffffff",
+    symbolColor: dark ? "#a8a8a8" : "#505050",
+    height: 46,
+  });
 }
 
 function validateBounds(value) {
@@ -402,6 +510,30 @@ function smokePassedForCurrentVersion(state) {
 
 function registerIpc({ logger, stateStore }) {
   const handle = (channel, handler) => registerLoggedIpc(ipcMain, logger, channel, handler);
+  handle("launcher:tasks", () => taskService.snapshot());
+  handle("launcher:task-settings", (_event, value) => taskService.configure(value));
+  handle("launcher:task-key", (_event, value) => taskService.setKey(value));
+  handle("launcher:task-key-remove", () => taskService.removeKey());
+  handle("launcher:task-check", () => taskService.check());
+  handle("launcher:task-preview", (_event, input) => taskService.preview(input));
+  handle("launcher:task-start", (_event, input) => taskService.start(input));
+  handle("launcher:task-mode", (_event, id, mode) => taskService.setMode(id, mode));
+  handle("launcher:task-action", (_event, id, action, feedback) => taskService.action(id, action, feedback));
+  handle("launcher:task-approval", (_event, id, requestId, decision) => taskService.approve(id, requestId, decision));
+  handle("launcher:task-folder", async () => {
+    const result = await dialog.showOpenDialog(mainWindow, { properties: ["openDirectory"] });
+    return result.canceled ? null : result.filePaths[0];
+  });
+  handle("launcher:task-export", async (_event, id) => {
+    const task = taskService.snapshot().tasks.find(t => t.id === id);
+    if (!task) throw new Error("Task not found");
+    const result = await dialog.showSaveDialog(mainWindow, { defaultPath: `chat2codex-task-${id.slice(0, 8)}.json`, filters: [{ name: "Task report", extensions: ["json"] }] });
+    if (result.canceled || !result.filePath) return null;
+    // Export is explicit: report contains the request, project names and execution evidence.
+    const { writePrivateFileAtomic } = require("./atomic-file.cjs");
+    writePrivateFileAtomic(result.filePath, JSON.stringify(task, null, 2) + "\n");
+    return result.filePath;
+  });
   handle("launcher:snapshot", async () => ({
     profile: LAUNCHER_PROFILE.kind,
     profilePaths: {
@@ -414,7 +546,7 @@ function registerIpc({ logger, stateStore }) {
     connectorName: runtimeHost.browserConnectorName(),
     mcpCredentialsConfigured: runtimeHost?.mcpCredentialsConfigured() ?? false,
     logs: logger.recent(),
-    urls: { github: GITHUB_URL, x: X_URL, connectors: CONNECTORS_URL, tunnels: TUNNELS_URL, keys: KEYS_URL },
+    urls: { github: GITHUB_URL, pricing: PRICING_URL, connectors: CONNECTORS_URL, tunnels: TUNNELS_URL, keys: KEYS_URL },
     platform: process.platform,
     packaged: app.isPackaged,
     version: app.getVersion(),
@@ -425,22 +557,25 @@ function registerIpc({ logger, stateStore }) {
 
   handle("launcher:set-language", (_event, language) => {
     const state = stateStore.update({ language: validateLanguage(language) });
-    updateTrayMenu(state.language);
+    updateTrayMenu(state.language, state);
+    return state;
+  });
+  handle("launcher:set-theme", (_event, value) => {
+    const theme = validateTheme(value);
+    const state = stateStore.update({ theme });
+    applyWindowTheme(mainWindow, theme);
     return state;
   });
   handle("launcher:open-social", async (_event, target) => {
-    const url = target === "github" ? GITHUB_URL : target === "x" ? X_URL : null;
-    if (!url) throw new Error("Unknown social target");
-    await openWebUrl(url);
-    const patch = target === "github" ? { githubOpened: true } : { xOpened: true };
-    return stateStore.update(patch);
+    if (target !== "github") throw new Error("Unknown social target");
+    await openWebUrl(GITHUB_URL);
+    return stateStore.update({ githubOpened: true });
   });
   handle("launcher:complete-onboarding", (_event, language) => {
     const current = stateStore.read();
-    if (!current.githubOpened || !current.xOpened) throw new Error("Open the GitHub and X pages before continuing");
     if (current.autoStart) setAutostart(app, true);
     const next = stateStore.update({ language: validateLanguage(language), onboardingComplete: true });
-    updateTrayMenu(next.language);
+    updateTrayMenu(next.language, next);
     logger.info("launcher.onboarding_completed", { language: next.language });
     return next;
   });
@@ -448,6 +583,13 @@ function registerIpc({ logger, stateStore }) {
   handle("launcher:open-external", async (_event, url) => {
     if (!ALLOWED_EXTERNAL_URLS.has(url)) throw new Error("External URL is not allowlisted");
     await openWebUrl(url);
+    return true;
+  });
+  handle("launcher:copy-text", (_event, value) => {
+    if (typeof value !== "string" || value.length < 1 || value.length > 500 || value.includes("\0")) {
+      throw new Error("Clipboard text is invalid");
+    }
+    clipboard.writeText(value);
     return true;
   });
 
@@ -680,6 +822,7 @@ function registerIpc({ logger, stateStore }) {
     const result = await runtimeHost.setBiggerContext(enabled === true);
     const state = stateStore.update({
       experimentalBiggerContext: result.enabled,
+      biggerContextRecommendationDismissed: true,
       codexCatalogVerified: IS_DEV_PROFILE ? true : false,
       codexRestartRequired: IS_DEV_PROFILE ? false : true,
     });
@@ -687,8 +830,13 @@ function registerIpc({ logger, stateStore }) {
     if (!IS_DEV_PROFILE) startCatalogVerificationMonitor({ logger, stateStore });
     return state;
   });
+  handle("launcher:bigger-context-recommendation-dismiss", () => stateStore.update({
+    biggerContextRecommendationDismissed: true,
+  }));
   handle("launcher:set-preference", (_event, key, value) => {
-    const ordinary = key === "keepRunningOnClose" || key === "showBrowserDuringTurns";
+    const ordinary = key === "keepRunningOnClose"
+      || key === "showBrowserDuringTurns"
+      || key === "taskNotifications";
     if (!ordinary) throw new Error("Unknown preference");
     return stateStore.update({ [key]: value === true });
   });
@@ -709,6 +857,37 @@ function registerIpc({ logger, stateStore }) {
     });
     logger.info("launcher.logs_exported", { recordCount });
     return result.filePath;
+  });
+  handle("launcher:usage-summary", () => currentUsageSummary());
+  handle("launcher:export-usage", async () => {
+    const date = new Date().toISOString().slice(0, 10);
+    const copy = nativeCopyFor(stateStore.read().language);
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: copy.exportUsage,
+      defaultPath: path.join(app.getPath("documents"), `chat2codex-usage-${date}.json`),
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+    exportUsageSummary(await currentUsageSummary(), result.filePath);
+    logger.info("launcher.usage_exported");
+    return result.filePath;
+  });
+  handle("launcher:reset-usage", async () => {
+    const copy = nativeCopyFor(stateStore.read().language);
+    const confirmation = await dialog.showMessageBox(mainWindow, {
+      type: "warning",
+      title: copy.resetUsageTitle,
+      message: copy.resetUsageMessage,
+      detail: copy.resetUsageDetail,
+      buttons: [copy.cancel, copy.resetUsage],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    if (confirmation.response !== 1) return { cancelled: true, summary: await currentUsageSummary() };
+    const summary = await resetRuntimeUsage(runtimeSupervisor, USAGE_PATH);
+    logger.info("launcher.usage_reset");
+    return { cancelled: false, summary };
   });
   handle("launcher:update-install", async () => {
     if (!updateController) throw new Error("Launcher updates are unavailable");
@@ -743,6 +922,7 @@ async function requestQuit() {
     if (activeOperation) {
       throw new Error(`Wait for ${activeOperation} to finish before quitting Chat2Codex`);
     }
+    await taskService?.shutdown();
     await runtimeSupervisor?.shutdown({ cancelActiveTurns: true, force: true });
     stopCatalogVerificationMonitor();
     quitting = true;
@@ -764,6 +944,9 @@ async function requestQuit() {
 }
 
 async function start() {
+  const startupAt = Date.now();
+  const startupStage = stage => { if (process.argv.includes("--launcher-smoke-test")) console.error(`STARTUP_STAGE ${Date.now() - startupAt}ms ${stage}`); };
+  startupStage("single-instance-lock");
   const gotLock = app.requestSingleInstanceLock();
   if (!gotLock) {
     app.quit();
@@ -771,6 +954,7 @@ async function start() {
   }
   app.on("second-instance", () => showMainWindow());
 
+  startupStage("verify-package-runtime");
   await waitForPackagedRuntimeSource({ app, resourcesPath: process.resourcesPath });
   let installedRuntimeRoot = null;
   let runtimeRootResolved = false;
@@ -787,7 +971,9 @@ async function start() {
     }
     return installedRuntimeRoot;
   };
+  startupStage("install-durable-runtime");
   installedRuntimeRoot = runtimeRootProvider();
+  startupStage("electron-ready");
 
   cdpPort = await findFreePort();
   if (process.platform === "linux") {
@@ -798,10 +984,15 @@ async function start() {
 
   await app.whenReady();
 
-  const stateStore = createStateStore(path.join(app.getPath("userData"), "launcher-state.json"));
+  if (process.platform === "darwin") app.dock?.setIcon(APP_ICON_PATH);
+
+  const stateStore = createStateStore(
+    path.join(app.getPath("userData"), "launcher-state.json"),
+    (state) => updateTrayMenu(state.language, state),
+  );
   if (IS_DEV_PROFILE && !stateStore.read().onboardingComplete) {
     stateStore.update({
-      language: stateStore.read().language || "en",
+      language: stateStore.read().language || "zh-CN",
       onboardingComplete: true,
       autoStart: false,
     });
@@ -829,7 +1020,7 @@ async function start() {
     publish: (record) => send("launcher:log", record),
   });
   const startHidden = process.argv.includes("--hidden") && stateStore.read().onboardingComplete;
-  nativeTheme.themeSource = "system";
+  nativeTheme.themeSource = stateStore.read().theme;
   mainWindow = createWindow({
     logger,
     stateStore,
@@ -840,6 +1031,7 @@ async function start() {
     logger,
     getBrowserHost: () => browserHost,
     getPreferences: () => stateStore.read(),
+    onTurnEnded: (event) => { if (!event.traceId?.startsWith("plan_")) notifyTaskComplete(stateStore, logger, event); },
   }).start();
   runtimeSupervisor = new RuntimeSupervisor({
     app,
@@ -880,6 +1072,26 @@ async function start() {
     publishState: (state) => send("launcher:browser-state", state),
   });
   await browserHost.ready();
+  const notifiedTaskStates = new Map();
+  taskService = new TaskService({
+    home: path.join(CORE_HOME, "workbench"), safeStorage,
+    browserReady: () => browserHost?.snapshot()?.authenticated === true,
+    publish: value => {
+      send("launcher:tasks-changed", value); updateTrayMenu(stateStore.read().language, stateStore.read());
+      for (const task of value.tasks) {
+        const previous = notifiedTaskStates.get(task.id); notifiedTaskStates.set(task.id, task.status);
+        if (previous && previous !== task.status && ["completed", "waiting", "review_required", "interrupted", "budget"].includes(task.status)
+          && stateStore.read().taskNotifications && !mainWindow?.isFocused() && Notification.isSupported()) {
+          const zh = stateStore.read().language === "zh-CN";
+          new Notification({ title: "Chat2Codex", body: task.status === "completed" ? (zh ? "任务已完成，打开首页查看结果。" : "Task completed. Open Home to review the result.") : (zh ? "任务需要查看，打开首页继续。" : "A task needs attention. Open Home to continue.") }).show();
+        }
+      }
+    },
+    plannerInvocation: () => ({
+      ...runtimeInvocation({ app, sourceRoot: SOURCE_ROOT, installedRuntimeRoot: runtimeRootProvider(), args: ["planner"] }),
+      env: { CHAT2CODEX_HOME: CORE_HOME }, descriptor: BROWSER_DESCRIPTOR_PATH,
+    }),
+  });
   const updaterRuntimeRoot = runtimeRootProvider();
   updateController = createUpdateController({
     currentVersion: app.getVersion(),
@@ -895,7 +1107,7 @@ async function start() {
     logger,
   });
   registerIpc({ logger, stateStore });
-  const trayAvailable = createTray(logger, stateStore.read().language);
+  const trayAvailable = createTray(logger, stateStore.read().language, stateStore.read());
   if (startHidden && !trayAvailable) mainWindow.once("ready-to-show", () => showMainWindow());
   const launcherSmokeTest = process.argv.includes("--launcher-smoke-test");
   let startupAuthenticationRefresh = Promise.resolve();
@@ -906,6 +1118,7 @@ async function start() {
       });
     });
   }
+  startupStage("load-renderer");
   await loadRenderer(mainWindow);
   if (!launcherSmokeTest) void updateController.checkOnce();
   if (launcherSmokeTest) {
@@ -913,6 +1126,7 @@ async function start() {
     if (app.isPackaged && !smokeRuntimeRoot) {
       throw new Error("Packaged launcher smoke test could not install its durable runtime");
     }
+    startupStage("verify-runtime-executable");
     const versionInvocation = runtimeSupervisor.runtimeCommand(["--version"]);
     const versionResult = spawnSync(versionInvocation.executable, versionInvocation.args, {
       cwd: versionInvocation.cwd,
@@ -940,6 +1154,7 @@ async function start() {
       packaged: app.isPackaged,
       runtimeVerified: true,
     })}\n`);
+    startupStage("shutdown");
     browserHost.destroy();
     await browserControl.close();
     mainWindow.destroy();

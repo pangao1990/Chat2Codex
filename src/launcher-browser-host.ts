@@ -311,6 +311,7 @@ export type LauncherTurnActivity =
       conversationKey?: string;
       connectorIdentity?: string;
       requireRetainedConversation?: boolean;
+      compaction?: boolean;
     }
   | {
       phase: "heartbeat";
@@ -327,6 +328,7 @@ export type LauncherTurnActivity =
       message?: string;
       retain?: boolean;
       connectorBound?: boolean;
+      compaction?: boolean;
     };
 
 export const LAUNCHER_TURN_START_TIMEOUT_MS = 5_000;

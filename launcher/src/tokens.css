@@ -1,7 +1,8 @@
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
   --blue-100: #99ceff;
+  --blue-200: #63b3ff;
   --blue-300: #339cff;
   --blue-900: #00284d;
   --gray-0: #ffffff;
@@ -19,35 +20,52 @@
   --red-300: #ff6764;
   --red-400: #fa423e;
 
-  --color-background-surface-under: #000000;
-  --color-background-surface: var(--gray-900);
-  --color-background-sidebar: var(--gray-800);
-  --color-background-elevated: var(--gray-750);
-  --color-background-control: rgb(255 255 255 / 3%);
-  --color-background-control-hover: rgb(255 255 255 / 7%);
-  --color-background-control-active: rgb(255 255 255 / 10%);
-  --color-background-button-secondary: rgb(255 255 255 / 5%);
-  --color-background-button-secondary-hover: rgb(255 255 255 / 8%);
-  --color-background-status-success: rgb(4 184 76 / 16%);
-  --color-background-status-warning: rgb(255 133 73 / 12%);
-  --color-background-status-error: rgb(250 66 62 / 13%);
+  --color-background-surface-under: #e9e9e7;
+  --color-background-surface: #ffffff;
+  --color-background-sidebar: #f3f3f1;
+  --color-background-elevated: #ffffff;
+  --color-background-control: rgb(0 0 0 / 3.5%);
+  --color-background-control-hover: rgb(0 0 0 / 6.5%);
+  --color-background-control-active: rgb(0 0 0 / 10%);
+  --color-background-button-primary: #171717;
+  --color-background-button-secondary: rgb(0 0 0 / 5%);
+  --color-background-button-secondary-hover: rgb(0 0 0 / 8%);
+  --color-background-sidebar-translucent: rgb(246 246 244 / 88%);
+  --color-background-workspace-translucent: rgb(255 255 255 / 92%);
+  --color-background-chrome-translucent: rgb(255 255 255 / 82%);
+  --color-background-empty-translucent: rgb(255 255 255 / 90%);
+  --color-background-guide: rgb(246 246 244 / 92%);
+  --color-background-overlay: rgb(0 0 0 / 24%);
+  --color-background-status-success: rgb(4 145 63 / 10%);
+  --color-background-status-warning: rgb(212 92 28 / 10%);
+  --color-background-status-error: rgb(210 36 33 / 9%);
 
-  --color-text-primary: var(--gray-0);
-  --color-text-secondary: rgb(255 255 255 / 70%);
-  --color-text-tertiary: rgb(255 255 255 / 50%);
-  --color-text-disabled: rgb(255 255 255 / 32%);
-  --color-text-accent: var(--blue-100);
-  --color-text-success: var(--green-300);
-  --color-text-warning: var(--orange-300);
-  --color-text-error: var(--red-300);
+  --color-text-primary: #171717;
+  --color-text-secondary: rgb(0 0 0 / 68%);
+  --color-text-tertiary: rgb(0 0 0 / 50%);
+  --color-text-disabled: rgb(0 0 0 / 30%);
+  --color-text-accent: #075caf;
+  --color-text-button-primary: #ffffff;
+  --color-text-success: #08783d;
+  --color-text-warning: #b94d17;
+  --color-text-error: #c8322f;
 
-  --color-icon-primary: rgb(255 255 255 / 90%);
-  --color-icon-secondary: rgb(255 255 255 / 70%);
-  --color-icon-tertiary: rgb(255 255 255 / 50%);
-  --color-border: rgb(255 255 255 / 8%);
-  --color-border-light: rgb(255 255 255 / 4%);
-  --color-border-heavy: rgb(255 255 255 / 16%);
-  --color-border-focus: rgb(51 156 255 / 70%);
+  --color-icon-primary: rgb(0 0 0 / 86%);
+  --color-icon-secondary: rgb(0 0 0 / 66%);
+  --color-icon-tertiary: rgb(0 0 0 / 48%);
+  --color-border: rgb(0 0 0 / 9%);
+  --color-border-light: rgb(0 0 0 / 5%);
+  --color-border-heavy: rgb(0 0 0 / 16%);
+  --color-border-focus: rgb(0 103 206 / 62%);
+  --color-scrollbar: rgb(0 0 0 / 16%);
+  --color-scrollbar-hover: rgb(0 0 0 / 28%);
+  --color-spinner-border: rgb(0 0 0 / 18%);
+  --color-switch-off: #c7c7c5;
+  --color-switch-knob: #ffffff;
+  --color-selection: rgb(51 156 255 / 24%);
+  --color-shadow: rgb(0 0 0 / 22%);
+  --color-shadow-heavy: rgb(0 0 0 / 36%);
+  --color-highlight: rgb(255 255 255 / 72%);
 
   --font-ui: "OpenAI Sans", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Hiragino Sans", "Yu Gothic UI", "Meiryo", "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
@@ -74,4 +92,55 @@
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --duration-micro: 140ms;
   --duration-panel: 300ms;
+}
+
+.app-root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-background-surface-under: #000000;
+  --color-background-surface: var(--gray-900);
+  --color-background-sidebar: var(--gray-800);
+  --color-background-elevated: var(--gray-750);
+  --color-background-control: rgb(255 255 255 / 3%);
+  --color-background-control-hover: rgb(255 255 255 / 7%);
+  --color-background-control-active: rgb(255 255 255 / 10%);
+  --color-background-button-primary: var(--gray-0);
+  --color-background-button-secondary: rgb(255 255 255 / 5%);
+  --color-background-button-secondary-hover: rgb(255 255 255 / 8%);
+  --color-background-sidebar-translucent: rgb(33 33 33 / 78%);
+  --color-background-workspace-translucent: rgb(24 24 24 / 90%);
+  --color-background-chrome-translucent: rgb(24 24 24 / 82%);
+  --color-background-empty-translucent: rgb(24 24 24 / 86%);
+  --color-background-guide: rgb(13 13 13 / 68%);
+  --color-background-overlay: rgb(0 0 0 / 42%);
+  --color-background-status-success: rgb(4 184 76 / 16%);
+  --color-background-status-warning: rgb(255 133 73 / 12%);
+  --color-background-status-error: rgb(250 66 62 / 13%);
+
+  --color-text-primary: var(--gray-0);
+  --color-text-secondary: rgb(255 255 255 / 70%);
+  --color-text-tertiary: rgb(255 255 255 / 50%);
+  --color-text-disabled: rgb(255 255 255 / 32%);
+  --color-text-accent: var(--blue-100);
+  --color-text-button-primary: var(--gray-1000);
+  --color-text-success: var(--green-300);
+  --color-text-warning: var(--orange-300);
+  --color-text-error: var(--red-300);
+
+  --color-icon-primary: rgb(255 255 255 / 90%);
+  --color-icon-secondary: rgb(255 255 255 / 70%);
+  --color-icon-tertiary: rgb(255 255 255 / 50%);
+  --color-border: rgb(255 255 255 / 8%);
+  --color-border-light: rgb(255 255 255 / 4%);
+  --color-border-heavy: rgb(255 255 255 / 16%);
+  --color-border-focus: rgb(51 156 255 / 70%);
+  --color-scrollbar: rgb(255 255 255 / 16%);
+  --color-scrollbar-hover: rgb(255 255 255 / 28%);
+  --color-spinner-border: rgb(255 255 255 / 20%);
+  --color-switch-off: var(--gray-600);
+  --color-switch-knob: var(--gray-0);
+  --color-selection: rgb(51 156 255 / 34%);
+  --color-shadow: rgb(0 0 0 / 42%);
+  --color-shadow-heavy: rgb(0 0 0 / 80%);
+  --color-highlight: rgb(255 255 255 / 4%);
 }
